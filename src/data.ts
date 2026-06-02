@@ -37,6 +37,7 @@ export interface Playlist {
   id: string;
   name: string;
   items: { a: string; i: number }[];
+  imageUrl?: string;
   tracks?: Track[]; // pre-resolved (Spotify playlists skip items[])
   totalTracks?: number;
   trackNextUrl?: string | null;

@@ -37,7 +37,7 @@ export function ArtistCard({ name, tab, onTabChange, onOpenAlbum, onPlay, onBack
                 <div key={a.id} className="card-album-cell" onClick={() => onOpenAlbum(a)}>
                   <Thumb color={a.color} imageUrl={a.imageUrl} />
                   <div className="ca-title">{a.title}</div>
-                  <div className="ca-sub">{a.year}</div>
+                  <div className="ca-sub">{a.year || a.artist}</div>
                 </div>
               ))}
             </div>

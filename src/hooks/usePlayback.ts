@@ -81,6 +81,34 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     })
   }, [track.title, track.artist, track.album, track.imageUrl, queue.length])
 
+  useEffect(() => {
+    const nextTracks = Array.from({ length: Math.min(5, queue.length - 1) }, (_, i) => queue[(idx + i + 1) % queue.length])
+    const images: HTMLImageElement[] = []
+    const audios: HTMLAudioElement[] = []
+
+    nextTracks.forEach((t) => {
+      if (t.imageUrl) {
+        const image = new Image()
+        image.src = t.imageUrl
+        images.push(image)
+      }
+      if (t.previewUrl) {
+        const audio = new Audio()
+        audio.preload = 'metadata'
+        audio.src = t.previewUrl
+        audio.load()
+        audios.push(audio)
+      }
+    })
+
+    return () => {
+      audios.forEach(audio => {
+        audio.removeAttribute('src')
+        audio.load()
+      })
+    }
+  }, [idx, queue])
+
   // ── SDK state sync (engine === 'sdk') ────────────────────────────────────
   useEffect(() => {
     if (engine !== 'sdk' || !spotify?.sdkState) return

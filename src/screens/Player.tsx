@@ -2,6 +2,7 @@ import { PlaybackState } from '../hooks/usePlayback'
 import { fmt } from '../data'
 import { Icons } from '../components/icons'
 import { ProgressBar, useSwipe } from '../components/Pivot'
+import { useLibrary } from '../LibraryContext'
 
 interface Props {
   pb: PlaybackState
@@ -11,8 +12,10 @@ interface Props {
 export function Player({ pb, onBack }: Props) {
   const { track, queue, idx, playing, time, fav, shuffle, repeat,
           toggle, next, prev, seek, toggleFav, toggleShuffle, cycleRepeat } = pb
+  const { likedTrackUris } = useLibrary()
   const pct = Math.min(100, (time / track.dur) * 100)
   const repeatState = repeat === 0 ? 'outline' : 'on'
+  const isLiked = fav || Boolean(track.spotifyUri && likedTrackUris.has(track.spotifyUri))
   const swipe = useSwipe(onBack, () => {})
 
   return (
@@ -30,7 +33,7 @@ export function Player({ pb, onBack }: Props) {
             {track.imageUrl && <img src={track.imageUrl} alt="" />}
           </div>
           <div className="sideicons">
-            <button className={'iconbtn ' + (fav ? 'on' : 'outline')} onClick={toggleFav} aria-label="Favourite">
+            <button className={'iconbtn ' + (isLiked ? 'on' : 'outline')} onClick={toggleFav} aria-label="Favourite">
               {Icons.heart}
             </button>
             <button className={'iconbtn ' + (shuffle ? 'on' : '')} onClick={toggleShuffle} aria-label="Shuffle">

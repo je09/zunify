@@ -17,7 +17,9 @@ export function NowPlayingPane({ pb, onOpen }: Props) {
       <div className="pane-head">now playing</div>
 
       <div className="artrow">
-        <div className="art" style={{ background: track.color }} onClick={onOpen} role="button" aria-label="Open now playing" />
+        <div className="art" style={{ background: track.color }} onClick={onOpen} role="button" aria-label="Open now playing">
+          {track.imageUrl && <img src={track.imageUrl} alt="" />}
+        </div>
         <div className="sideicons">
           <button className={'iconbtn ' + (shuffle ? 'on' : '')} onClick={toggleShuffle} aria-label="Shuffle">
             {Icons.shuffle}

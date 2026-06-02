@@ -141,6 +141,7 @@ function mapPlaylistSummary(pl: SpSimplePlaylist): Playlist {
     id: pl.id,
     name: pl.name,
     items: [],
+    imageUrl: pl.images[0]?.url,
     tracks: [],
     totalTracks: pl.tracks.total,
     trackNextUrl: `/playlists/${pl.id}/tracks?limit=${TRACK_BATCH_LIMIT}&fields=items(track(uri,name,duration_ms,preview_url,artists,album(name,images))),next,total`,

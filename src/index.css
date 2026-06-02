@@ -247,6 +247,8 @@ body {
 .lrow-name.song  { line-height: 1.1; }
 .lrow-title      { font-size: 24px; font-weight: 300; line-height: 1.1; }
 .lrow-sub        { font-size: 16px; font-weight: 300; color: var(--dim); margin-top: 2px; }
+.liked-dot       { flex: 0 0 auto; width: 20px; height: 20px; color: var(--accent); opacity: .95; }
+.liked-dot svg   { width: 20px; height: 20px; display: block; }
 
 .genre-item      { font-size: 30px; font-weight: 300; line-height: 1.5; color: var(--accent); cursor: pointer; padding: 4px 0; }
 
@@ -284,6 +286,7 @@ body {
   width: 88px; height: 88px; flex: 0 0 auto;
   display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
 }
+.pl-mosaic img { width: 100%; height: 100%; object-fit: cover; grid-column: 1 / -1; grid-row: 1 / -1; }
 .pl-mosaic span { display: block; }
 .pl-name  { font-size: 25px; font-weight: 300; line-height: 1.1; }
 .pl-count { font-size: 17px; font-weight: 300; color: var(--dim); margin-top: 4px; }

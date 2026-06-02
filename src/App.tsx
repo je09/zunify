@@ -7,7 +7,7 @@ import {
   startLogin, handleCallback, getValidToken,
   clearTokens, hasStoredTokens,
 } from './spotifyAuth'
-import { getClientId, setClientId, getRedirectUri, setRedirectUri } from './spotifyConfig'
+import { getClientId, setClientId, getRedirectUri } from './spotifyConfig'
 import { Album, Playlist, albumQueue } from './data'
 import { Hub } from './screens/Hub'
 import { Collection } from './screens/Collection'
@@ -213,15 +213,9 @@ interface SettingsProps {
 }
 
 function Settings({ theme, token, onLogout, onClose }: SettingsProps) {
-  const [clientId, setClientIdState]       = useState(getClientId)
-  const [redirectUri, setRedirectUriState] = useState(getRedirectUri)
-  const [loginError, setLoginError]        = useState('')
+  const [clientId, setClientIdState] = useState(getClientId)
+  const [loginError, setLoginError]  = useState('')
   const loggedIn = Boolean(token) || hasStoredTokens()
-
-  const insecureOrigin = (() => {
-    const h = window.location.hostname
-    return window.location.protocol !== 'https:' && h !== 'localhost' && h !== '127.0.0.1'
-  })()
 
   const handleLogin = async () => {
     setLoginError('')
@@ -232,11 +226,6 @@ function Settings({ theme, token, onLogout, onClose }: SettingsProps) {
   const saveClientId = (v: string) => {
     setClientIdState(v)
     setClientId(v)
-  }
-
-  const saveRedirectUri = (v: string) => {
-    setRedirectUriState(v)
-    setRedirectUri(v)
   }
 
   return (
@@ -275,16 +264,9 @@ function Settings({ theme, token, onLogout, onClose }: SettingsProps) {
 
       {!loggedIn && (
         <>
-          {insecureOrigin && (
-            <div className="settings-hint" style={{ color: '#e67e22' }}>
-              ⚠ You are on <strong>{window.location.hostname}</strong> over HTTP.
-              Spotify only allows <code>localhost</code> or HTTPS as redirect URI.
-              Open the app at <strong>http://localhost:5173</strong>, or deploy to HTTPS.
-            </div>
-          )}
           <div className="settings-hint">
             1. Go to <span style={{ color: 'var(--accent)' }}>developer.spotify.com</span> → Dashboard → Create app.<br />
-            2. Add Redirect URI: <code>{redirectUri}</code><br />
+            2. Add Redirect URI: <code>{getRedirectUri()}</code><br />
             3. Paste Client ID below. Premium = full tracks; free = 30 s previews.
           </div>
           <input
@@ -294,15 +276,6 @@ function Settings({ theme, token, onLogout, onClose }: SettingsProps) {
             value={clientId}
             onChange={(e) => saveClientId(e.target.value)}
             spellCheck={false}
-          />
-          <input
-            className="settings-input"
-            type="text"
-            placeholder={`Redirect URI (default: ${window.location.origin})`}
-            value={redirectUri === window.location.origin ? '' : redirectUri}
-            onChange={(e) => saveRedirectUri(e.target.value || '')}
-            spellCheck={false}
-            style={{ marginTop: 8 }}
           />
           <button
             className="theme-btn"

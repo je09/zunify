@@ -22,7 +22,7 @@ export function getRedirectUri(): string {
   if (stored) return stored
   // Default: current origin (works on localhost; override if using IP/tunnel)
   const { origin, pathname } = window.location
-  return origin + (pathname === '/' ? '' : pathname.replace(/\/$/, ''))
+  return origin + (pathname === '/' ? '/' : pathname.replace(/\/$/, ''))
 }
 
 export function setRedirectUri(uri: string): void {

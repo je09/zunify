@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import {
   Track, Album, Playlist, SongEntry,
   GENRES,
@@ -21,7 +22,7 @@ interface Props {
 }
 
 export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpenGenre, onOpenPlaylist, onPlay, onBack }: Props) {
-  const { albums, artists, songs, playlists, loading, error } = useLibrary()
+  const { albums, artists, songs, playlists, loading, loadingMore, error, totals, loadMore } = useLibrary()
   const swipe = useSwipe(
     () => tab === 0 ? onBack() : onTabChange(tab - 1),
     () => onTabChange(Math.min(TABS.length - 1, tab + 1)),
@@ -47,11 +48,11 @@ export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpen
     <div className="page">
       <Pivot tabs={TABS} active={tab} onChange={onTabChange} />
       <PivotArea tab={tab} {...swipe}>
-        <ArtistsTab artists={artists} albums={albums} onOpenArtist={onOpenArtist} onPlay={onPlay} />
-        <AlbumsTab albums={albums} onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
-        <SongsTab songs={songs} onPlay={onPlay} />
+        <ArtistsTab artists={artists} albums={albums} hasMore={hasMore(albums.length, totals.albums)} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onPlay={onPlay} />
+        <AlbumsTab albums={albums} total={totals.albums} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
+        <SongsTab songs={songs} hasMore={hasMore(albums.length, totals.albums)} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onPlay={onPlay} />
         <GenresTab onOpenGenre={onOpenGenre} />
-        <PlaylistsTab playlists={playlists} onOpenPlaylist={onOpenPlaylist} />
+        <PlaylistsTab playlists={playlists} total={totals.playlists} loadingMore={loadingMore.playlists} onLoadMore={() => loadMore('playlists')} onOpenPlaylist={onOpenPlaylist} />
         <RadioTab artists={artists} albums={albums} onPlay={onPlay} />
       </PivotArea>
       <BottomBack onBack={onBack} />
@@ -59,15 +60,40 @@ export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpen
   )
 }
 
+function hasMore(loaded: number, total: number | null): boolean {
+  return total === null || loaded < total
+}
+
+function LoadMoreSentinel({ active, loading, onLoadMore }: { active: boolean; loading: boolean; onLoadMore: () => void }) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!active || !el) return
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting && !loading) onLoadMore()
+    }, { rootMargin: '240px 0px' })
+
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [active, loading, onLoadMore])
+
+  return <div ref={ref} style={{ height: 80, color: '#888', paddingTop: 16 }}>{loading ? 'loading more...' : ''}</div>
+}
+
 // ── Artists ──────────────────────────────────────────────────────────────────
 interface ArtistsProps {
   artists: string[]
   albums: Album[]
+  hasMore: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
   onOpenArtist: (n: string) => void
   onPlay: (q: Track[], i: number) => void
 }
 
-function ArtistsTab({ artists, albums, onOpenArtist, onPlay }: ArtistsProps) {
+function ArtistsTab({ artists, albums, hasMore, loadingMore, onLoadMore, onOpenArtist, onPlay }: ArtistsProps) {
   let prevLetter = ''
   return (
     <div className="llist">
@@ -92,7 +118,7 @@ function ArtistsTab({ artists, albums, onOpenArtist, onPlay }: ArtistsProps) {
           </div>
         )
       })}
-      <div style={{ height: 80 }} />
+      <LoadMoreSentinel active={hasMore} loading={loadingMore} onLoadMore={onLoadMore} />
     </div>
   )
 }
@@ -100,11 +126,14 @@ function ArtistsTab({ artists, albums, onOpenArtist, onPlay }: ArtistsProps) {
 // ── Albums ───────────────────────────────────────────────────────────────────
 interface AlbumsProps {
   albums: Album[]
+  total: number | null
+  loadingMore: boolean
+  onLoadMore: () => void
   onOpenArtist: (n: string) => void
   onOpenAlbum: (a: Album) => void
 }
 
-function AlbumsTab({ albums, onOpenArtist, onOpenAlbum }: AlbumsProps) {
+function AlbumsTab({ albums, total, loadingMore, onLoadMore, onOpenArtist, onOpenAlbum }: AlbumsProps) {
   return (
     <div className="album-list">
       {albums.map((a) => (
@@ -119,13 +148,13 @@ function AlbumsTab({ albums, onOpenArtist, onOpenAlbum }: AlbumsProps) {
           </div>
         </div>
       ))}
-      <div style={{ height: 80 }} />
+      <LoadMoreSentinel active={hasMore(albums.length, total)} loading={loadingMore} onLoadMore={onLoadMore} />
     </div>
   )
 }
 
 // ── Songs ────────────────────────────────────────────────────────────────────
-function SongsTab({ songs, onPlay }: { songs: SongEntry[]; onPlay: (q: Track[], i: number) => void }) {
+function SongsTab({ songs, hasMore, loadingMore, onLoadMore, onPlay }: { songs: SongEntry[]; hasMore: boolean; loadingMore: boolean; onLoadMore: () => void; onPlay: (q: Track[], i: number) => void }) {
   return (
     <div className="song-list">
       {songs.map((s, i) => {
@@ -150,7 +179,7 @@ function SongsTab({ songs, onPlay }: { songs: SongEntry[]; onPlay: (q: Track[], 
           </div>
         )
       })}
-      <div style={{ height: 80 }} />
+      <LoadMoreSentinel active={hasMore} loading={loadingMore} onLoadMore={onLoadMore} />
     </div>
   )
 }
@@ -169,13 +198,15 @@ function GenresTab({ onOpenGenre }: { onOpenGenre: (g: string) => void }) {
 }
 
 // ── Playlists ────────────────────────────────────────────────────────────────
-function PlaylistsTab({ playlists, onOpenPlaylist }: { playlists: Playlist[]; onOpenPlaylist: (pl: Playlist) => void }) {
+function PlaylistsTab({ playlists, total, loadingMore, onLoadMore, onOpenPlaylist }: { playlists: Playlist[]; total: number | null; loadingMore: boolean; onLoadMore: () => void; onOpenPlaylist: (pl: Playlist) => void }) {
+  const loadedUserPlaylists = playlists.filter(pl => pl.id !== 'sp_liked').length
+
   return (
     <div className="pl-list">
       {playlists.map((pl) => {
         const tracks = pl.tracks ?? pl.items.map(it => resolvePlaylistTrack(it))
         const cols = tracks.slice(0, 4).map(t => t.color)
-        const count = tracks.length || pl.items.length
+        const count = pl.totalTracks ?? (tracks.length || pl.items.length)
         while (cols.length < 4) cols.push(cols[cols.length - 1] ?? '#444')
         return (
           <div key={pl.id} className="pl-row" onClick={() => onOpenPlaylist(pl)}>
@@ -189,7 +220,7 @@ function PlaylistsTab({ playlists, onOpenPlaylist }: { playlists: Playlist[]; on
           </div>
         )
       })}
-      <div style={{ height: 80 }} />
+      <LoadMoreSentinel active={hasMore(loadedUserPlaylists, total)} loading={loadingMore} onLoadMore={onLoadMore} />
     </div>
   )
 }

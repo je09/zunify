@@ -12,16 +12,8 @@ async function spGet<T>(path: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
-async function spGetAll<T>(first: string): Promise<T[]> {
-  const items: T[] = []
-  let cursor: string | null = first
-  while (cursor) {
-    const page: SpPaged<T> = await spGet<SpPaged<T>>(cursor)
-    items.push(...page.items)
-    cursor = page.next
-  }
-  return items
-}
+export const LIBRARY_BATCH_LIMIT = 20
+export const TRACK_BATCH_LIMIT = 50
 
 // ── Spotify response shapes ───────────────────────────────────────────────────
 
@@ -45,7 +37,7 @@ interface SpAlbum extends SpSimpleAlbum {
   release_date: string
   tracks: { items: Omit<SpTrack, 'album'>[] }
 }
-interface SpPaged<T> { items: T[]; next: string | null }
+interface SpPaged<T> { items: T[]; next: string | null; total?: number }
 interface SpSimplePlaylist {
   id: string
   name: string
@@ -84,38 +76,99 @@ function mapTrack(t: SpTrack): Track {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+export interface SpotifyPage<T> {
+  items: T[]
+  next: string | null
+  total: number | null
+}
+
+async function spPage<T>(path: string): Promise<SpotifyPage<T>> {
+  const page = await spGet<SpPaged<T>>(path)
+
+  return {
+    items: page.items,
+    next: page.next,
+    total: page.total ?? null,
+  }
+}
+
+export async function fetchSavedAlbumsPage(cursor = `/me/albums?limit=${LIBRARY_BATCH_LIMIT}`): Promise<SpotifyPage<Album>> {
+  const page = await spPage<{ album: SpAlbum }>(cursor)
+
+  return {
+    items: page.items.map(({ album }) => mapAlbum(album)),
+    next: page.next,
+    total: page.total,
+  }
+}
+
+export async function fetchLikedTracksPage(cursor = `/me/tracks?limit=${TRACK_BATCH_LIMIT}`): Promise<SpotifyPage<Track>> {
+  const page = await spPage<{ track: SpTrack }>(cursor)
+
+  return {
+    items: page.items.map(({ track }) => mapTrack(track)),
+    next: page.next,
+    total: page.total,
+  }
+}
+
+export async function fetchUserPlaylistsPage(cursor = `/me/playlists?limit=${LIBRARY_BATCH_LIMIT}`): Promise<SpotifyPage<Playlist>> {
+  const page = await spPage<SpSimplePlaylist>(cursor)
+  const playlists = await Promise.all(page.items.map(fetchPlaylistBatch))
+
+  return {
+    items: playlists,
+    next: page.next,
+    total: page.total,
+  }
+}
+
+export async function fetchPlaylistTracksPage(playlistId: string, cursor?: string | null): Promise<SpotifyPage<Track>> {
+  const page = await spPage<{ track: SpTrack | null }>(
+    cursor ?? `/playlists/${playlistId}/tracks?limit=${TRACK_BATCH_LIMIT}&fields=items(track(uri,name,duration_ms,preview_url,artists,album(name,images))),next,total`
+  )
+
+  return {
+    items: page.items
+      .filter(it => it.track !== null)
+      .map(it => mapTrack(it.track!)),
+    next: page.next,
+    total: page.total,
+  }
+}
+
+async function fetchPlaylistBatch(pl: SpSimplePlaylist): Promise<Playlist> {
+  const trackPage = await fetchPlaylistTracksPage(pl.id)
+
+  return {
+    id: pl.id,
+    name: pl.name,
+    items: [],
+    tracks: trackPage.items,
+    totalTracks: trackPage.total ?? pl.tracks.total,
+    trackNextUrl: trackPage.next,
+  }
+}
+
 export async function fetchSavedAlbums(): Promise<Album[]> {
-  const items = await spGetAll<{ album: SpAlbum }>('/me/albums?limit=50')
-  return items.map(({ album }) => mapAlbum(album))
+  return (await fetchSavedAlbumsPage()).items
 }
 
 export async function fetchLikedSongsPlaylist(): Promise<Playlist> {
-  const items = await spGetAll<{ track: SpTrack }>('/me/tracks?limit=50')
+  const page = await fetchLikedTracksPage()
+
   return {
     id: 'sp_liked',
     name: 'liked songs',
     items: [],
-    tracks: items.map(({ track }) => mapTrack(track)),
+    tracks: page.items,
+    totalTracks: page.total ?? page.items.length,
+    trackNextUrl: page.next,
   }
 }
 
 export async function fetchUserPlaylists(): Promise<Playlist[]> {
-  const playlists = await spGetAll<SpSimplePlaylist>('/me/playlists?limit=50')
-  return Promise.all(
-    playlists.map(async (pl): Promise<Playlist> => {
-      const trackItems = await spGetAll<{ track: SpTrack | null }>(
-        `/playlists/${pl.id}/tracks?limit=100&fields=items(track(uri,name,duration_ms,preview_url,artists,album(name,images))),next`
-      )
-      return {
-        id: pl.id,
-        name: pl.name,
-        items: [],
-        tracks: trackItems
-          .filter(it => it.track !== null)
-          .map(it => mapTrack(it.track!)),
-      }
-    })
-  )
+  return (await fetchUserPlaylistsPage()).items
 }
 
 export async function fetchAlbum(id: string): Promise<Album> {

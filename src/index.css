@@ -3,12 +3,12 @@
 /* No selection anywhere except explicit input fields */
 * { -webkit-user-select: none; user-select: none; }
 input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
-html, body { height: 100%; }
+html, body { height: 100%; background: #000; }
 body {
   font-family: "Segoe UI", "Segoe WP", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
-  background: #111;
+  background: #000;
   /* always flex-center so app-shell is centered on desktop */
   display: flex;
   align-items: center;
@@ -28,6 +28,7 @@ body {
   height: 100dvh;
   position: relative;
   overflow: hidden;
+  background: #000;
   display: flex;
   flex-direction: column;
   /* Prevent browser swipe-back/forward from stealing our gesture events in PWA */

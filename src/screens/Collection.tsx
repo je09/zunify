@@ -1,8 +1,9 @@
 import {
-  Track, Album, Playlist,
-  ALBUMS, ARTISTS, SONGS, GENRES, PLAYLISTS,
+  Track, Album, Playlist, SongEntry,
+  GENRES, PLAYLISTS,
   albumQueue, artistQueue, resolvePlaylistTrack,
 } from '../data'
+import { useLibrary } from '../LibraryContext'
 import { Pivot, PivotArea, Section, Thumb, useSwipe, BottomBack } from '../components/Pivot'
 import { Icons } from '../components/icons'
 
@@ -20,21 +21,30 @@ interface Props {
 }
 
 export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpenGenre, onOpenPlaylist, onPlay, onBack }: Props) {
+  const { albums, artists, songs, loading } = useLibrary()
   const swipe = useSwipe(
     () => tab === 0 ? onBack() : onTabChange(tab - 1),
     () => onTabChange(Math.min(TABS.length - 1, tab + 1)),
   )
 
+  if (loading) {
+    return (
+      <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>
+        loading library…
+      </div>
+    )
+  }
+
   return (
     <div className="page">
       <Pivot tabs={TABS} active={tab} onChange={onTabChange} />
       <PivotArea tab={tab} {...swipe}>
-        <ArtistsTab onOpenArtist={onOpenArtist} onPlay={onPlay} />
-        <AlbumsTab onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
-        <SongsTab onPlay={onPlay} />
+        <ArtistsTab artists={artists} albums={albums} onOpenArtist={onOpenArtist} onPlay={onPlay} />
+        <AlbumsTab albums={albums} onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
+        <SongsTab songs={songs} onPlay={onPlay} />
         <GenresTab onOpenGenre={onOpenGenre} />
         <PlaylistsTab onOpenPlaylist={onOpenPlaylist} />
-        <RadioTab onPlay={onPlay} />
+        <RadioTab artists={artists} albums={albums} onPlay={onPlay} />
       </PivotArea>
       <BottomBack onBack={onBack} />
     </div>
@@ -42,12 +52,19 @@ export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpen
 }
 
 // ── Artists ──────────────────────────────────────────────────────────────────
-function ArtistsTab({ onOpenArtist, onPlay }: { onOpenArtist: (n: string) => void; onPlay: (q: Track[], i: number) => void }) {
+interface ArtistsProps {
+  artists: string[]
+  albums: Album[]
+  onOpenArtist: (n: string) => void
+  onPlay: (q: Track[], i: number) => void
+}
+
+function ArtistsTab({ artists, albums, onOpenArtist, onPlay }: ArtistsProps) {
   let prevLetter = ''
   return (
     <div className="llist">
       <Section>all music</Section>
-      {ARTISTS.map((name) => {
+      {artists.map((name) => {
         const letter = name.replace(/^the\s+/i, '')[0].toUpperCase()
         const showTile = letter !== prevLetter
         prevLetter = letter
@@ -58,7 +75,7 @@ function ArtistsTab({ onOpenArtist, onPlay }: { onOpenArtist: (n: string) => voi
               <button
                 className="play-circle"
                 aria-label={`Play ${name}`}
-                onClick={(e) => { e.stopPropagation(); onPlay(artistQueue(name), 0) }}
+                onClick={(e) => { e.stopPropagation(); onPlay(artistQueue(name, albums), 0) }}
               >
                 {Icons.playCircle}
               </button>
@@ -73,10 +90,16 @@ function ArtistsTab({ onOpenArtist, onPlay }: { onOpenArtist: (n: string) => voi
 }
 
 // ── Albums ───────────────────────────────────────────────────────────────────
-function AlbumsTab({ onOpenArtist, onOpenAlbum }: { onOpenArtist: (n: string) => void; onOpenAlbum: (a: Album) => void }) {
+interface AlbumsProps {
+  albums: Album[]
+  onOpenArtist: (n: string) => void
+  onOpenAlbum: (a: Album) => void
+}
+
+function AlbumsTab({ albums, onOpenArtist, onOpenAlbum }: AlbumsProps) {
   return (
     <div className="album-list">
-      {ALBUMS.map((a) => (
+      {albums.map((a) => (
         <div key={a.id} className="album-group">
           <div className="group-head" onClick={() => onOpenArtist(a.artist)}>{a.artist}</div>
           <div className="album-row" onClick={() => onOpenAlbum(a)}>
@@ -94,12 +117,12 @@ function AlbumsTab({ onOpenArtist, onOpenAlbum }: { onOpenArtist: (n: string) =>
 }
 
 // ── Songs ────────────────────────────────────────────────────────────────────
-function SongsTab({ onPlay }: { onPlay: (q: Track[], i: number) => void }) {
+function SongsTab({ songs, onPlay }: { songs: SongEntry[]; onPlay: (q: Track[], i: number) => void }) {
   return (
     <div className="song-list">
-      {SONGS.map((s, i) => {
+      {songs.map((s, i) => {
         const letter = s.title[0].toUpperCase()
-        const prevLetter = i > 0 ? SONGS[i - 1].title[0].toUpperCase() : null
+        const prevLetter = i > 0 ? songs[i - 1].title[0].toUpperCase() : null
         return (
           <div key={s.album.id + s.title}>
             {letter !== prevLetter && <div className="index-tile">{letter}</div>}
@@ -162,20 +185,22 @@ function PlaylistsTab({ onOpenPlaylist }: { onOpenPlaylist: (pl: Playlist) => vo
 }
 
 // ── Radio ────────────────────────────────────────────────────────────────────
-function RadioTab({ onPlay }: { onPlay: (q: Track[], i: number) => void }) {
+interface RadioProps { artists: string[]; albums: Album[]; onPlay: (q: Track[], i: number) => void }
+
+function RadioTab({ artists, albums, onPlay }: RadioProps) {
   return (
     <div className="llist">
       <Section>smart dj</Section>
-      {ARTISTS.map((name) => (
+      {artists.map((name) => (
         <div key={name} className="lrow">
           <button
             className="play-circle"
             aria-label={`Start ${name} radio`}
-            onClick={(e) => { e.stopPropagation(); onPlay(artistQueue(name), 0) }}
+            onClick={(e) => { e.stopPropagation(); onPlay(artistQueue(name, albums), 0) }}
           >
             {Icons.playCircle}
           </button>
-          <div className="lrow-name" onClick={() => onPlay(artistQueue(name), 0)}>
+          <div className="lrow-name" onClick={() => onPlay(artistQueue(name, albums), 0)}>
             {name} radio
           </div>
         </div>

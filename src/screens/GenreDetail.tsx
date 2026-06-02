@@ -1,4 +1,5 @@
 import { Track, GENRE_ARTISTS, artistQueue } from '../data'
+import { useLibrary } from '../LibraryContext'
 import { Section, useSwipe, BottomBack } from '../components/Pivot'
 import { Icons } from '../components/icons'
 
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function GenreDetail({ genre, onOpenArtist, onPlay, onBack }: Props) {
+  const { albums } = useLibrary()
   const artists = GENRE_ARTISTS[genre] ?? []
   const swipe = useSwipe(onBack, () => {})
 
@@ -24,7 +26,7 @@ export function GenreDetail({ genre, onOpenArtist, onPlay, onBack }: Props) {
               <button
                 className="play-circle"
                 aria-label={`Play ${name}`}
-                onClick={(e) => { e.stopPropagation(); onPlay(artistQueue(name), 0) }}
+                onClick={(e) => { e.stopPropagation(); onPlay(artistQueue(name, albums), 0) }}
               >
                 {Icons.playCircle}
               </button>

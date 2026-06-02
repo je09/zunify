@@ -13,9 +13,10 @@ export interface Track {
   dur: number; // seconds
   artist: string;
   album: string;
-  color: string; // placeholder until real artwork available
+  color: string;
   imageUrl?: string;
-  previewUrl?: string; // Spotify preview_url (30-second MP3)
+  previewUrl?: string;
+  spotifyUri?: string; // spotify:track:xxx — enables Web Playback SDK engine
 }
 
 export interface Album {
@@ -23,10 +24,14 @@ export interface Album {
   artist: string;
   title: string;
   year: number;
-  color: string; // placeholder swatch
-  imageUrl?: string; // real artwork URL (Spotify)
+  color: string;
+  imageUrl?: string;
   tracks: [string, number][];
+  spotifyTrackUris?: string[];           // parallel to tracks[]
+  spotifyTrackPreviews?: (string | undefined)[]; // parallel to tracks[]
 }
+
+export type SongEntry = { title: string; dur: number; artist: string; album: Album; idx: number }
 
 export interface Playlist {
   id: string;
@@ -378,47 +383,49 @@ export const PLAYLISTS: Playlist[] = [
 
 export const PLACEHOLDER_PREVIEW_URL = "/audio/1 - In Between.mp3";
 
-export const ARTISTS: string[] = [...new Set(ALBUMS.map((a) => a.artist))].sort(
-  (x, y) =>
-    x
-      .replace(/^the\s+/i, "")
-      .localeCompare(y.replace(/^the\s+/i, ""), "en", { sensitivity: "base" }),
-);
+export const ARTISTS: string[] = buildArtists(ALBUMS)
 
-export const SONGS: {
-  title: string;
-  dur: number;
-  artist: string;
-  album: Album;
-  idx: number;
-}[] = [];
-ALBUMS.forEach((a) =>
-  a.tracks.forEach(([title, dur], i) =>
-    SONGS.push({ title, dur, artist: a.artist, album: a, idx: i }),
-  ),
-);
-SONGS.sort((x, y) =>
-  x.title.localeCompare(y.title, "en", { sensitivity: "base" }),
-);
+export function buildArtists(albums: Album[]): string[] {
+  return [...new Set(albums.map(a => a.artist))].sort(
+    (x, y) => x.replace(/^the\s+/i, '').localeCompare(y.replace(/^the\s+/i, ''), 'en', { sensitivity: 'base' })
+  )
+}
+
+export function buildSongs(albums: Album[]): SongEntry[] {
+  const out: SongEntry[] = []
+  albums.forEach(a =>
+    a.tracks.forEach(([title, dur], i) =>
+      out.push({ title, dur, artist: a.artist, album: a, idx: i })
+    )
+  )
+  return out.sort((x, y) => x.title.localeCompare(y.title, 'en', { sensitivity: 'base' }))
+}
+
+export const SONGS: SongEntry[] = buildSongs(ALBUMS)
 
 export function albumQueue(a: Album): Track[] {
-  return a.tracks.map(([title, dur]) => ({
+  return a.tracks.map(([title, dur], i) => ({
     title,
     dur,
     artist: a.artist,
     album: a.title,
     color: a.color,
     imageUrl: a.imageUrl,
-    previewUrl: PLACEHOLDER_PREVIEW_URL,
-  }));
+    // Spotify albums: use preview from API (may be null → undefined), no local placeholder
+    // Static albums: use local placeholder MP3
+    previewUrl: a.spotifyTrackPreviews
+      ? a.spotifyTrackPreviews[i]
+      : PLACEHOLDER_PREVIEW_URL,
+    spotifyUri: a.spotifyTrackUris?.[i],
+  }))
 }
 
-export function artistAlbums(name: string): Album[] {
-  return ALBUMS.filter((a) => a.artist === name);
+export function artistAlbums(name: string, albums: Album[] = ALBUMS): Album[] {
+  return albums.filter((a) => a.artist === name)
 }
 
-export function artistQueue(name: string): Track[] {
-  return artistAlbums(name).flatMap(albumQueue);
+export function artistQueue(name: string, albums: Album[] = ALBUMS): Track[] {
+  return artistAlbums(name, albums).flatMap(albumQueue)
 }
 
 export function resolvePlaylistTrack(it: { a: string; i: number }): Track {

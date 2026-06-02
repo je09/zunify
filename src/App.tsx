@@ -1,7 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { usePlayback } from './hooks/usePlayback'
 import { useTheme, ACCENTS, ThemeMode } from './hooks/useTheme'
-import { Album, Playlist, ALBUMS, albumQueue } from './data'
+import { useSpotifyPlayer } from './useSpotifyPlayer'
+import { LibraryProvider, useLibrary } from './LibraryContext'
+import {
+  startLogin, handleCallback, getValidToken,
+  clearTokens, hasStoredTokens,
+} from './spotifyAuth'
+import { getClientId, setClientId, getRedirectUri, setRedirectUri } from './spotifyConfig'
+import { Album, Playlist, albumQueue } from './data'
 import { Hub } from './screens/Hub'
 import { Collection } from './screens/Collection'
 import { ArtistCard } from './screens/ArtistCard'
@@ -10,9 +17,7 @@ import { GenreDetail } from './screens/GenreDetail'
 import { PlaylistDetail } from './screens/PlaylistDetail'
 import { Player } from './screens/Player'
 
-// ── Navigation stack ──────────────────────────────────────────────────────────
-// Each frame is a discriminated union — push to navigate, pop to go back.
-// No prevScreen, no backTo, no fragile tracking.
+// ── Navigation ────────────────────────────────────────────────────────────────
 
 type NavFrame =
   | { screen: 'home' }
@@ -23,9 +28,61 @@ type NavFrame =
   | { screen: 'playlist';   playlist: Playlist }
   | { screen: 'nowplaying' }
 
+// ── Root — wraps everything in LibraryProvider ────────────────────────────────
+
 export function App() {
-  const pb   = usePlayback()
-  const theme = useTheme()
+  const [token, setToken] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function init() {
+      if (new URLSearchParams(window.location.search).has('code')) {
+        await handleCallback()
+      }
+      if (hasStoredTokens()) {
+        const t = await getValidToken()
+        setToken(t)
+      }
+    }
+    void init()
+  }, [])
+
+  // Refresh token every 4 minutes while logged in
+  useEffect(() => {
+    if (!token) return
+    const id = setInterval(async () => {
+      const t = await getValidToken()
+      setToken(t)
+    }, 4 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [Boolean(token)])
+
+  const handleLogout = () => {
+    clearTokens()
+    setToken(null)
+  }
+
+  return (
+    <LibraryProvider token={token}>
+      <AppContent
+        token={token}
+        onLogout={handleLogout}
+      />
+    </LibraryProvider>
+  )
+}
+
+// ── App content (inside LibraryProvider) ─────────────────────────────────────
+
+interface ContentProps {
+  token: string | null
+  onLogout: () => void
+}
+
+function AppContent({ token, onLogout }: ContentProps) {
+  const spotifyEngine = useSpotifyPlayer(Boolean(token))
+  const pb            = usePlayback(spotifyEngine)
+  const theme         = useTheme()
+  const { albums }    = useLibrary()
 
   const [navStack, setNavStack] = useState<NavFrame[]>([{ screen: 'home' }])
   const [navKey, setNavKey]     = useState(0)
@@ -35,18 +92,11 @@ export function App() {
   const current = navStack[navStack.length - 1]
 
   const push = (frame: NavFrame) => {
-    setNavDir('fwd')
-    setNavStack(s => [...s, frame])
-    setNavKey(k => k + 1)
+    setNavDir('fwd'); setNavStack(s => [...s, frame]); setNavKey(k => k + 1)
   }
-
   const back = () => {
-    setNavDir('back')
-    setNavStack(s => (s.length > 1 ? s.slice(0, -1) : s))
-    setNavKey(k => k + 1)
+    setNavDir('back'); setNavStack(s => s.length > 1 ? s.slice(0, -1) : s); setNavKey(k => k + 1)
   }
-
-  // Mutate the top frame's tab without triggering a nav animation
   const updateTab = (tab: number) =>
     setNavStack(s => s.map((f, i) => i === s.length - 1 ? { ...f, tab } as NavFrame : f))
 
@@ -55,7 +105,6 @@ export function App() {
     push({ screen: 'nowplaying' })
   }
 
-  // ── Screen switch ───────────────────────────────────────────────────────────
   let body: JSX.Element
 
   switch (current.screen) {
@@ -65,7 +114,7 @@ export function App() {
           pb={pb}
           onOpenCollection={(tab) => push({ screen: 'collection', tab })}
           onOpenNowPlaying={() => push({ screen: 'nowplaying' })}
-          onShuffle={() => playAndGo(ALBUMS.flatMap(albumQueue).sort(() => Math.random() - 0.5), 0)}
+          onShuffle={() => playAndGo(albums.flatMap(albumQueue).sort(() => Math.random() - 0.5), 0)}
           onSettings={() => setShowSettings(true)}
         />
       )
@@ -140,7 +189,12 @@ export function App() {
   return (
     <div className={`app-shell theme-${theme.mode}`}>
       {showSettings && (
-        <Settings theme={theme} onClose={() => setShowSettings(false)} />
+        <Settings
+          theme={theme}
+          token={token}
+          onLogout={onLogout}
+          onClose={() => setShowSettings(false)}
+        />
       )}
       <div className={`screen-in screen-${navDir}`} key={navKey}>
         {body}
@@ -150,12 +204,41 @@ export function App() {
 }
 
 // ── Settings panel ────────────────────────────────────────────────────────────
+
 interface SettingsProps {
   theme: ReturnType<typeof useTheme>
+  token: string | null
+  onLogout: () => void
   onClose: () => void
 }
 
-function Settings({ theme, onClose }: SettingsProps) {
+function Settings({ theme, token, onLogout, onClose }: SettingsProps) {
+  const [clientId, setClientIdState]       = useState(getClientId)
+  const [redirectUri, setRedirectUriState] = useState(getRedirectUri)
+  const [loginError, setLoginError]        = useState('')
+  const loggedIn = Boolean(token) || hasStoredTokens()
+
+  const insecureOrigin = (() => {
+    const h = window.location.hostname
+    return window.location.protocol !== 'https:' && h !== 'localhost' && h !== '127.0.0.1'
+  })()
+
+  const handleLogin = async () => {
+    setLoginError('')
+    try { await startLogin() }
+    catch (e) { setLoginError(e instanceof Error ? e.message : String(e)) }
+  }
+
+  const saveClientId = (v: string) => {
+    setClientIdState(v)
+    setClientId(v)
+  }
+
+  const saveRedirectUri = (v: string) => {
+    setRedirectUriState(v)
+    setRedirectUri(v)
+  }
+
   return (
     <div className="settings-overlay">
       <button className="settings-close" onClick={onClose} aria-label="Close">×</button>
@@ -187,6 +270,62 @@ function Settings({ theme, onClose }: SettingsProps) {
           </button>
         ))}
       </div>
+
+      <div className="settings-label" style={{ marginTop: 24 }}>spotify</div>
+
+      {!loggedIn && (
+        <>
+          {insecureOrigin && (
+            <div className="settings-hint" style={{ color: '#e67e22' }}>
+              ⚠ You are on <strong>{window.location.hostname}</strong> over HTTP.
+              Spotify only allows <code>localhost</code> or HTTPS as redirect URI.
+              Open the app at <strong>http://localhost:5173</strong>, or deploy to HTTPS.
+            </div>
+          )}
+          <div className="settings-hint">
+            1. Go to <span style={{ color: 'var(--accent)' }}>developer.spotify.com</span> → Dashboard → Create app.<br />
+            2. Add Redirect URI: <code>{redirectUri}</code><br />
+            3. Paste Client ID below. Premium = full tracks; free = 30 s previews.
+          </div>
+          <input
+            className="settings-input"
+            type="text"
+            placeholder="Client ID"
+            value={clientId}
+            onChange={(e) => saveClientId(e.target.value)}
+            spellCheck={false}
+          />
+          <input
+            className="settings-input"
+            type="text"
+            placeholder={`Redirect URI (default: ${window.location.origin})`}
+            value={redirectUri === window.location.origin ? '' : redirectUri}
+            onChange={(e) => saveRedirectUri(e.target.value || '')}
+            spellCheck={false}
+            style={{ marginTop: 8 }}
+          />
+          <button
+            className="theme-btn"
+            style={{ marginTop: 8 }}
+            disabled={!clientId.trim()}
+            onClick={handleLogin}
+          >
+            connect spotify
+          </button>
+          {loginError && (
+            <div className="settings-hint" style={{ color: '#e74c3c', marginTop: 8, whiteSpace: 'pre-line' }}>
+              {loginError}
+            </div>
+          )}
+        </>
+      )}
+
+      {loggedIn && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+          <span style={{ color: '#1db954', fontSize: 13 }}>● connected</span>
+          <button className="theme-btn" onClick={onLogout}>disconnect</button>
+        </div>
+      )}
     </div>
   )
 }

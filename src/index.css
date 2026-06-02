@@ -537,3 +537,14 @@ body {
   display: flex; align-items: center; justify-content: center;
   -webkit-tap-highlight-color: transparent;
 }
+.settings-hint {
+  font-size: 13px; color: var(--fg-muted); line-height: 1.5;
+  margin-bottom: 12px;
+}
+.settings-input {
+  width: 100%; padding: 8px 12px; border-radius: 3px;
+  border: 1px solid #444; background: rgba(255,255,255,.05);
+  color: var(--fg); font-size: 14px; font-family: inherit;
+  outline: none; box-sizing: border-box;
+}
+.settings-input:focus { border-color: var(--accent); }

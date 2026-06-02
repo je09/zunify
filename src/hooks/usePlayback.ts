@@ -1,23 +1,22 @@
 // ---------------------------------------------------------------------------
-// Playback hook — works in two modes:
+// Playback hook — three engine modes:
 //
-//   PREVIEW MODE (current): simulated timer via requestAnimationFrame.
-//     No real audio. Swapping in Spotify preview URLs:
-//     → set track.previewUrl, hook auto-uses <audio> element instead.
+//   'sdk'   — Spotify Web Playback SDK (Premium, full tracks).
+//              Activated when a SpotifyEngine is passed AND current track
+//              has a spotifyUri.  Controls/state proxied to SDK.
 //
-//   AUDIO MODE (Spotify preview_url or any MP3 URL):
-//     The <audio> element is managed internally. Time/duration come from
-//     the element's timeupdate / durationchange events. seek() calls
-//     audio.currentTime. No RAF needed.
+//   'audio' — <audio> element for any URL (preview_url, local MP3).
+//              Activated when track has previewUrl and SDK engine not active.
 //
-//   SPOTIFY WEB PLAYBACK SDK (future — Premium):
-//     Replace the audio element branch with SDK calls. The state shape
-//     (queue, idx, playing, time, fav, shuffle, repeat) stays the same;
-//     only the engine underneath changes.
+//   'raf'   — requestAnimationFrame timer simulation (no real audio).
+//              Fallback when neither of the above applies.
+//
+// The UI layer never selects an engine — it only calls play/toggle/etc.
 // ---------------------------------------------------------------------------
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Track, albumQueue, ALBUMS } from '../data'
+import type { SpotifyEngine } from '../useSpotifyPlayer'
 
 export interface PlaybackState {
   queue: Track[]
@@ -39,7 +38,7 @@ export interface PlaybackState {
   cycleRepeat: () => void
 }
 
-export function usePlayback(): PlaybackState {
+export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const [queue, setQueue]     = useState<Track[]>(() => albumQueue(ALBUMS[0]))
   const [idx, setIdx]         = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -54,9 +53,14 @@ export function usePlayback(): PlaybackState {
   const lastRef  = useRef(0)
 
   const track = queue[idx] ?? queue[0]
-  const hasAudio = Boolean(track?.previewUrl)
 
-  // ── Media Session (lock screen / notification) ───────────────────────────
+  // Active engine for the current track
+  const engine: 'sdk' | 'audio' | 'raf' =
+    spotify != null && Boolean(track?.spotifyUri) ? 'sdk'
+    : Boolean(track?.previewUrl) ? 'audio'
+    : 'raf'
+
+  // ── Media Session ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
     navigator.mediaSession.metadata = new MediaMetadata({
@@ -70,18 +74,28 @@ export function usePlayback(): PlaybackState {
     navigator.mediaSession.setActionHandler('play', () => setPlaying(true))
     navigator.mediaSession.setActionHandler('pause', () => setPlaying(false))
     navigator.mediaSession.setActionHandler('nexttrack', () => {
-      setIdx((i) => (i + 1) % queue.length)
-      setTime(0)
+      setIdx(i => (i + 1) % queue.length); setTime(0)
     })
     navigator.mediaSession.setActionHandler('previoustrack', () => {
-      setIdx((i) => (i - 1 + queue.length) % queue.length)
-      setTime(0)
+      setIdx(i => (i - 1 + queue.length) % queue.length); setTime(0)
     })
   }, [track.title, track.artist, track.album, track.imageUrl, queue.length])
 
-  // ── Audio element lifecycle ──────────────────────────────────────────────
+  // ── SDK state sync (engine === 'sdk') ────────────────────────────────────
   useEffect(() => {
-    if (!hasAudio) return
+    if (engine !== 'sdk' || !spotify?.sdkState) return
+    const s = spotify.sdkState
+    setTime(s.position / 1000)
+    setPlaying(!s.paused)
+    const uri = s.track_window.current_track.uri
+    const newIdx = queue.findIndex(t => t.spotifyUri === uri)
+    if (newIdx !== -1 && newIdx !== idx) setIdx(newIdx)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spotify?.sdkState])
+
+  // ── Audio element lifecycle (engine === 'audio') ─────────────────────────
+  useEffect(() => {
+    if (engine !== 'audio') return
 
     const audio = new Audio(track.previewUrl!)
     audio.preload = 'auto'
@@ -105,17 +119,17 @@ export function usePlayback(): PlaybackState {
       audioRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track.previewUrl, idx])
+  }, [track.previewUrl, idx, engine])
 
   useEffect(() => {
-    if (!hasAudio || !audioRef.current) return
+    if (engine !== 'audio' || !audioRef.current) return
     if (playing) void audioRef.current.play()
     else audioRef.current.pause()
-  }, [playing, hasAudio])
+  }, [playing, engine])
 
-  // ── RAF simulation (no previewUrl) ───────────────────────────────────────
+  // ── RAF simulation (engine === 'raf') ────────────────────────────────────
   useEffect(() => {
-    if (hasAudio || !playing) {
+    if (engine !== 'raf' || !playing) {
       cancelAnimationFrame(rafRef.current)
       lastRef.current = 0
       return
@@ -123,7 +137,7 @@ export function usePlayback(): PlaybackState {
 
     const step = (ts: number) => {
       if (lastRef.current) {
-        setTime((tm) => {
+        setTime(tm => {
           const nt = tm + (ts - lastRef.current) / 1000
           if (nt >= track.dur) {
             if (repeat === 2) return 0
@@ -139,11 +153,11 @@ export function usePlayback(): PlaybackState {
     rafRef.current = requestAnimationFrame(step)
     return () => { cancelAnimationFrame(rafRef.current); lastRef.current = 0 }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, hasAudio, idx, repeat, track.dur])
+  }, [playing, engine, idx, repeat, track.dur])
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   const advanceQueue = useCallback(() => {
-    setIdx((i) => {
+    setIdx(i => {
       if (shuffle) {
         let n: number
         do { n = Math.floor(Math.random() * queue.length) } while (n === i && queue.length > 1)
@@ -160,27 +174,58 @@ export function usePlayback(): PlaybackState {
     setTime(0)
     setPlaying(true)
     setStarted(true)
-  }, [])
 
-  const toggle = useCallback(() => setPlaying((p) => !p), [])
+    if (spotify && q[i]?.spotifyUri) {
+      const uris = q.flatMap(t => t.spotifyUri ? [t.spotifyUri] : [])
+      const offset = q.slice(0, i).filter(t => t.spotifyUri).length
+      void spotify.startPlayback(uris, offset)
+    }
+  }, [spotify])
 
-  const next = useCallback(() => { advanceQueue() }, [advanceQueue])
+  const toggle = useCallback(() => {
+    if (engine === 'sdk' && spotify?.player) {
+      void spotify.player.togglePlay()
+      return
+    }
+    setPlaying(p => !p)
+  }, [engine, spotify])
+
+  const next = useCallback(() => {
+    if (engine === 'sdk' && spotify?.player) {
+      void spotify.player.nextTrack()
+      return
+    }
+    advanceQueue()
+  }, [engine, spotify, advanceQueue])
 
   const prev = useCallback(() => {
-    if (time > 3) { setTime(0); if (audioRef.current) audioRef.current.currentTime = 0; return }
-    setIdx((i) => (i - 1 + queue.length) % queue.length)
+    if (engine === 'sdk' && spotify?.player) {
+      void spotify.player.previousTrack()
+      return
+    }
+    if (time > 3) {
+      setTime(0)
+      if (audioRef.current) audioRef.current.currentTime = 0
+      return
+    }
+    setIdx(i => (i - 1 + queue.length) % queue.length)
     setTime(0)
-  }, [time, queue.length])
+  }, [engine, spotify, time, queue.length])
 
   const seek = useCallback((fraction: number) => {
+    if (engine === 'sdk' && spotify?.player) {
+      const dur = spotify.sdkState?.duration ?? track.dur * 1000
+      void spotify.player.seek(Math.round(fraction * dur))
+      return
+    }
     const t = fraction * track.dur
     setTime(t)
     if (audioRef.current) audioRef.current.currentTime = t
-  }, [track.dur])
+  }, [engine, spotify, track.dur])
 
-  const toggleFav     = useCallback(() => setFav((v) => !v), [])
-  const toggleShuffle = useCallback(() => setShuffle((v) => !v), [])
-  const cycleRepeat   = useCallback(() => setRepeat((r) => ((r + 1) % 3) as 0 | 1 | 2), [])
+  const toggleFav     = useCallback(() => setFav(v => !v), [])
+  const toggleShuffle = useCallback(() => setShuffle(v => !v), [])
+  const cycleRepeat   = useCallback(() => setRepeat(r => ((r + 1) % 3) as 0 | 1 | 2), [])
 
   return {
     queue, idx, track, playing, time, fav, shuffle, repeat, started,

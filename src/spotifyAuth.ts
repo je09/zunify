@@ -68,7 +68,7 @@ export async function startLogin(): Promise<void> {
   if (!clientId) throw new Error('Spotify Client ID not set')
 
   const verifier = b64url(crypto.getRandomValues(new Uint8Array(64)))
-  sessionStorage.setItem('sp_verifier', verifier)
+  localStorage.setItem('sp_verifier', verifier)
   const challenge = b64url(sha256(new TextEncoder().encode(verifier)))
 
   const url = new URL('https://accounts.spotify.com/authorize')
@@ -83,11 +83,11 @@ export async function startLogin(): Promise<void> {
 
 export async function handleCallback(): Promise<boolean> {
   const code = new URLSearchParams(window.location.search).get('code')
-  const verifier = sessionStorage.getItem('sp_verifier')
+  const verifier = localStorage.getItem('sp_verifier')
   if (!code || !verifier) return false
 
   window.history.replaceState({}, '', window.location.pathname)
-  sessionStorage.removeItem('sp_verifier')
+  localStorage.removeItem('sp_verifier')
 
   const res = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',

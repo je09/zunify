@@ -56,13 +56,13 @@ const DEFAULT: Library = {
   loadMorePlaylistTracks: noop,
 }
 
-// When Spotify auth exists but library hasn't loaded yet — show empty, not mockup
+// When Spotify auth exists but library hasn't loaded yet, show empty lists and let active screens request data.
 const EMPTY: Library = {
   albums: [],
   artists: [],
   songs: [],
   playlists: [],
-  loading: true,
+  loading: false,
   loadingMore: { albums: false, playlists: false, playlistTracks: {} },
   error: null,
   source: 'spotify',
@@ -117,21 +117,49 @@ function writeSpotifyLibraryCache(lib: SpotifyLibraryCache) {
   }
 }
 
-function likedSongsPlaylist(tracks: Track[]): Playlist {
+function likedSongsPlaylist(tracks: Track[], totalTracks = tracks.length): Playlist {
   return {
     id: 'sp_liked',
     name: 'liked songs',
     items: [],
     tracks,
-    totalTracks: tracks.length,
-    trackNextUrl: null,
+    totalTracks,
+    trackNextUrl: '/me/tracks?limit=50',
   }
+}
+
+function mergeAlbums(existing: Album[], incoming: Album[]): Album[] {
+  const seen = new Set(existing.map(album => album.id))
+  return [...existing, ...incoming.filter(album => {
+    if (seen.has(album.id)) return false
+    seen.add(album.id)
+    return true
+  })]
+}
+
+function mergePlaylists(existing: Playlist[], incoming: Playlist[]): Playlist[] {
+  const seen = new Set(existing.map(playlist => playlist.id))
+  return [...existing, ...incoming.filter(playlist => {
+    if (seen.has(playlist.id)) return false
+    seen.add(playlist.id)
+    return true
+  })]
+}
+
+function mergeTracks(existing: Track[], incoming: Track[]): Track[] {
+  const seen = new Set(existing.map(track => track.spotifyUri ?? `${track.artist}:${track.album}:${track.title}`))
+  return [...existing, ...incoming.filter(track => {
+    const key = track.spotifyUri ?? `${track.artist}:${track.album}:${track.title}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })]
 }
 
 function mergePlaylistTracks(playlists: Playlist[], playlistId: string, tracks: Track[], next: string | null, total: number | null): Playlist[] {
   return playlists.map(pl => pl.id === playlistId ? {
     ...pl,
-    tracks: [...(pl.tracks ?? []), ...tracks],
+    tracks: mergeTracks(pl.tracks ?? [], tracks),
     totalTracks: total ?? pl.totalTracks,
     trackNextUrl: next,
   } : pl)
@@ -175,7 +203,7 @@ export function LibraryProvider({ token, children }: Props) {
         .then(page => {
           nextAlbumsRef.current = page.next
           setLib(prev => {
-            const albums = [...prev.albums, ...page.items]
+            const albums = mergeAlbums(prev.albums, page.items)
             const totals = { ...prev.totals, albums: page.total ?? prev.totals.albums }
             saveCache(albums, prev.playlists, totals)
 
@@ -198,7 +226,7 @@ export function LibraryProvider({ token, children }: Props) {
     setLib(prev => ({ ...prev, loadingMore: { ...prev.loadingMore, playlists: true } }))
 
     Promise.all([
-      likedLoadedRef.current ? Promise.resolve(null) : fetchLikedTracksPage(),
+      likedLoadedRef.current ? Promise.resolve(null) : fetchLikedTracksPage('/me/tracks?limit=1'),
       fetchUserPlaylistsPage(nextPlaylistsRef.current),
     ])
       .then(([likedPage, playlistPage]) => {
@@ -211,9 +239,9 @@ export function LibraryProvider({ token, children }: Props) {
             ...liked,
             tracks: liked.tracks?.length ? liked.tracks : likedPage?.items ?? [],
             totalTracks: likedPage?.total ?? liked.totalTracks,
-            trackNextUrl: liked.trackNextUrl ?? likedPage?.next ?? null,
+            trackNextUrl: liked.trackNextUrl ?? '/me/tracks?limit=50',
           }
-          const playlists = [nextLiked, ...existingUserPlaylists, ...playlistPage.items]
+          const playlists = [nextLiked, ...mergePlaylists(existingUserPlaylists, playlistPage.items)]
           const totals = { ...prev.totals, songs: likedPage?.total ?? prev.totals.songs, playlists: playlistPage.total ?? prev.totals.playlists }
           saveCache(prev.albums, playlists, totals)
 
@@ -239,7 +267,11 @@ export function LibraryProvider({ token, children }: Props) {
     loadingPlaylistTracksRef.current = { ...loadingPlaylistTracksRef.current, [playlistId]: true }
     setLib(prev => ({ ...prev, loadingMore: { ...prev.loadingMore, playlistTracks: { ...prev.loadingMore.playlistTracks, [playlistId]: true } } }))
 
-    fetchPlaylistTracksPage(playlistId, playlist.trackNextUrl)
+    const fetchPage = playlistId === 'sp_liked'
+      ? fetchLikedTracksPage(playlist.trackNextUrl)
+      : fetchPlaylistTracksPage(playlistId, playlist.trackNextUrl)
+
+    fetchPage
       .then(page => {
         setLib(prev => {
           const playlists = mergePlaylistTracks(prev.playlists, playlistId, page.items, page.next, page.total)
@@ -272,8 +304,8 @@ export function LibraryProvider({ token, children }: Props) {
     const cached = readSpotifyLibraryCache()
 
     if (cached) {
-      nextAlbumsRef.current = cached.nextAlbums
-      nextPlaylistsRef.current = cached.nextPlaylists
+      nextAlbumsRef.current = cached.nextAlbums ?? (cached.totals.albums === null || cached.albums.length < cached.totals.albums ? undefined : null)
+      nextPlaylistsRef.current = cached.nextPlaylists ?? (cached.totals.playlists === null || cached.playlists.filter(pl => pl.id !== 'sp_liked').length < cached.totals.playlists ? undefined : null)
       likedLoadedRef.current = cached.playlists.some(pl => pl.id === 'sp_liked')
       setLib(buildSpotifyLibrary(cached))
       return
@@ -283,8 +315,6 @@ export function LibraryProvider({ token, children }: Props) {
     nextPlaylistsRef.current = undefined
     likedLoadedRef.current = false
     setLib(EMPTY)
-    loadMore('albums')
-    loadMore('playlists')
   }, [token, loadMore])
 
   return <LibraryContext.Provider value={{ ...lib, loadMore, loadMorePlaylistTracks }}>{children}</LibraryContext.Provider>

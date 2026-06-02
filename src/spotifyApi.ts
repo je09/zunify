@@ -114,10 +114,9 @@ export async function fetchLikedTracksPage(cursor = `/me/tracks?limit=${TRACK_BA
 
 export async function fetchUserPlaylistsPage(cursor = `/me/playlists?limit=${LIBRARY_BATCH_LIMIT}`): Promise<SpotifyPage<Playlist>> {
   const page = await spPage<SpSimplePlaylist>(cursor)
-  const playlists = await Promise.all(page.items.map(fetchPlaylistBatch))
 
   return {
-    items: playlists,
+    items: page.items.map(mapPlaylistSummary),
     next: page.next,
     total: page.total,
   }
@@ -137,16 +136,14 @@ export async function fetchPlaylistTracksPage(playlistId: string, cursor?: strin
   }
 }
 
-async function fetchPlaylistBatch(pl: SpSimplePlaylist): Promise<Playlist> {
-  const trackPage = await fetchPlaylistTracksPage(pl.id)
-
+function mapPlaylistSummary(pl: SpSimplePlaylist): Playlist {
   return {
     id: pl.id,
     name: pl.name,
     items: [],
-    tracks: trackPage.items,
-    totalTracks: trackPage.total ?? pl.tracks.total,
-    trackNextUrl: trackPage.next,
+    tracks: [],
+    totalTracks: pl.tracks.total,
+    trackNextUrl: `/playlists/${pl.id}/tracks?limit=${TRACK_BATCH_LIMIT}&fields=items(track(uri,name,duration_ms,preview_url,artists,album(name,images))),next,total`,
   }
 }
 

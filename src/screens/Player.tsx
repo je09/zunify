@@ -27,7 +27,7 @@ export function Player({ pb, onBack }: Props) {
 
         <div className="artrow">
           <div className="art swap" key={'a' + idx} style={{ background: track.color }}>
-            {/* swap for <img src={track.imageUrl} /> when Spotify artwork available */}
+            {track.imageUrl && <img src={track.imageUrl} alt="" />}
           </div>
           <div className="sideicons">
             <button className={'iconbtn ' + (fav ? 'on' : 'outline')} onClick={toggleFav} aria-label="Favourite">

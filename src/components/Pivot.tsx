@@ -1,5 +1,47 @@
-import { useRef, useLayoutEffect, useCallback } from 'react'
+import { useRef, useLayoutEffect, useState, useCallback, Children, ReactNode } from 'react'
 import { Icons } from './icons'
+
+// ── PivotArea — sliding tab transition (both tabs visible during animation) ───
+// Renders the exiting tab and the entering tab simultaneously with CSS slide
+// animations, giving the Metro "peek" effect where both contents are visible.
+
+export function PivotArea({
+  tab,
+  children,
+  ...rest
+}: { tab: number; children: ReactNode[] } & React.HTMLAttributes<HTMLDivElement>) {
+  const prevRef = useRef(tab)
+  const [exiting, setExiting] = useState<{ tab: number; dir: 'fwd' | 'back' } | null>(null)
+
+  useLayoutEffect(() => {
+    if (tab !== prevRef.current) {
+      setExiting({ tab: prevRef.current, dir: tab > prevRef.current ? 'fwd' : 'back' })
+      prevRef.current = tab
+    }
+  }, [tab])
+
+  const arr = Children.toArray(children)
+
+  return (
+    <div className="pivot-area" {...rest}>
+      {exiting && (
+        <div
+          key={`exit-${exiting.tab}`}
+          className={`pivot-pane pivot-exit-${exiting.dir}`}
+          onAnimationEnd={() => setExiting(null)}
+        >
+          {arr[exiting.tab]}
+        </div>
+      )}
+      <div
+        key={`cur-${tab}`}
+        className={`pivot-pane${exiting ? ` pivot-enter-${exiting.dir}` : ''}`}
+      >
+        {arr[tab]}
+      </div>
+    </div>
+  )
+}
 
 // ── Bottom back bar — shared across all sub-screens ──────────────────────────
 export function BottomBack({ onBack }: { onBack: () => void }) {
@@ -26,7 +68,7 @@ export function Pivot({ tabs, active, onChange }: PivotProps) {
   useLayoutEffect(() => {
     const el = itemRefs.current[active]
     const track = trackRef.current
-    if (el && track) track.scrollTo({ left: Math.max(0, el.offsetLeft - 26), behavior: 'auto' })
+    if (el && track) track.scrollTo({ left: Math.max(0, el.offsetLeft - 26), behavior: 'smooth' })
   }, [active])
 
   return (
@@ -81,33 +123,38 @@ interface ProgressBarProps {
 }
 
 export function ProgressBar({ pct, onSeek }: ProgressBarProps) {
-  const barRef = useRef<HTMLDivElement>(null)
+  const barRef  = useRef<HTMLDivElement>(null)
+  const dragging = useRef(false)
 
-  const getFraction = (e: React.PointerEvent) => {
-    const r = e.currentTarget.getBoundingClientRect()
-    return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width))
+  const seek = (e: React.PointerEvent) => {
+    if (!barRef.current) return
+    const r = barRef.current.getBoundingClientRect()
+    onSeek(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)))
   }
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation()
     e.currentTarget.setPointerCapture(e.pointerId)
-    onSeek(getFraction(e))
+    dragging.current = true
+    seek(e)
   }
-
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-    onSeek(getFraction(e))
-  }
+  const onPointerMove   = (e: React.PointerEvent<HTMLDivElement>) => { if (dragging.current) seek(e) }
+  const onPointerUp     = () => { dragging.current = false }
+  const onPointerCancel = () => { dragging.current = false }
 
   return (
     <div className="progress">
+      {/* bar-touch expands the hit area to 28px so touch is reliable */}
       <div
-        ref={barRef}
-        className="bar"
+        className="bar-touch"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
       >
-        <div className="fill" style={{ width: pct + '%' }} />
+        <div ref={barRef} className="bar">
+          <div className="fill" style={{ width: pct + '%' }} />
+        </div>
       </div>
     </div>
   )

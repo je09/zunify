@@ -56,6 +56,29 @@ export function usePlayback(): PlaybackState {
   const track = queue[idx] ?? queue[0]
   const hasAudio = Boolean(track?.previewUrl)
 
+  // ── Media Session (lock screen / notification) ───────────────────────────
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
+      artwork: track.imageUrl
+        ? [{ src: track.imageUrl, sizes: '600x600', type: 'image/jpeg' }]
+        : [],
+    })
+    navigator.mediaSession.setActionHandler('play', () => setPlaying(true))
+    navigator.mediaSession.setActionHandler('pause', () => setPlaying(false))
+    navigator.mediaSession.setActionHandler('nexttrack', () => {
+      setIdx((i) => (i + 1) % queue.length)
+      setTime(0)
+    })
+    navigator.mediaSession.setActionHandler('previoustrack', () => {
+      setIdx((i) => (i - 1 + queue.length) % queue.length)
+      setTime(0)
+    })
+  }, [track.title, track.artist, track.album, track.imageUrl, queue.length])
+
   // ── Audio element lifecycle ──────────────────────────────────────────────
   useEffect(() => {
     if (!hasAudio) return

@@ -1,16 +1,16 @@
-import { useState } from 'react'
 import {
   Track, Album, Playlist,
   ALBUMS, ARTISTS, SONGS, GENRES, PLAYLISTS,
   albumQueue, artistQueue, resolvePlaylistTrack,
 } from '../data'
-import { Pivot, Section, Thumb, useSwipe, BottomBack } from '../components/Pivot'
+import { Pivot, PivotArea, Section, Thumb, useSwipe, BottomBack } from '../components/Pivot'
 import { Icons } from '../components/icons'
 
 const TABS = ['artists', 'albums', 'songs', 'genres', 'playlists', 'radio']
 
 interface Props {
-  initialTab: number
+  tab: number
+  onTabChange: (t: number) => void
   onOpenArtist: (name: string) => void
   onOpenAlbum: (album: Album) => void
   onOpenGenre: (genre: string) => void
@@ -19,24 +19,23 @@ interface Props {
   onBack: () => void
 }
 
-export function Collection({ initialTab, onOpenArtist, onOpenAlbum, onOpenGenre, onOpenPlaylist, onPlay, onBack }: Props) {
-  const [tab, setTab] = useState(initialTab)
+export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpenGenre, onOpenPlaylist, onPlay, onBack }: Props) {
   const swipe = useSwipe(
-    () => tab === 0 ? onBack() : setTab((t) => t - 1),
-    () => setTab((t) => Math.min(TABS.length - 1, t + 1)),
+    () => tab === 0 ? onBack() : onTabChange(tab - 1),
+    () => onTabChange(Math.min(TABS.length - 1, tab + 1)),
   )
 
   return (
     <div className="page">
-      <Pivot tabs={TABS} active={tab} onChange={setTab} />
-      <div className="scroll" key={tab} {...swipe}>
-        {tab === 0 && <ArtistsTab onOpenArtist={onOpenArtist} onPlay={onPlay} />}
-        {tab === 1 && <AlbumsTab onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />}
-        {tab === 2 && <SongsTab onPlay={onPlay} />}
-        {tab === 3 && <GenresTab onOpenGenre={onOpenGenre} />}
-        {tab === 4 && <PlaylistsTab onOpenPlaylist={onOpenPlaylist} />}
-        {tab === 5 && <RadioTab onPlay={onPlay} />}
-      </div>
+      <Pivot tabs={TABS} active={tab} onChange={onTabChange} />
+      <PivotArea tab={tab} {...swipe}>
+        <ArtistsTab onOpenArtist={onOpenArtist} onPlay={onPlay} />
+        <AlbumsTab onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
+        <SongsTab onPlay={onPlay} />
+        <GenresTab onOpenGenre={onOpenGenre} />
+        <PlaylistsTab onOpenPlaylist={onOpenPlaylist} />
+        <RadioTab onPlay={onPlay} />
+      </PivotArea>
       <BottomBack onBack={onBack} />
     </div>
   )

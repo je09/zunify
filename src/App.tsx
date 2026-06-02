@@ -17,8 +17,8 @@ import { Player } from './screens/Player'
 type NavFrame =
   | { screen: 'home' }
   | { screen: 'collection'; tab: number }
-  | { screen: 'artist';     name: string }
-  | { screen: 'album';      album: Album }
+  | { screen: 'artist';     name: string; tab: number }
+  | { screen: 'album';      album: Album; tab: number }
   | { screen: 'genre';      genre: string }
   | { screen: 'playlist';   playlist: Playlist }
   | { screen: 'nowplaying' }
@@ -29,19 +29,26 @@ export function App() {
 
   const [navStack, setNavStack] = useState<NavFrame[]>([{ screen: 'home' }])
   const [navKey, setNavKey]     = useState(0)
+  const [navDir, setNavDir]     = useState<'fwd' | 'back'>('fwd')
   const [showSettings, setShowSettings] = useState(false)
 
   const current = navStack[navStack.length - 1]
 
   const push = (frame: NavFrame) => {
+    setNavDir('fwd')
     setNavStack(s => [...s, frame])
     setNavKey(k => k + 1)
   }
 
   const back = () => {
+    setNavDir('back')
     setNavStack(s => (s.length > 1 ? s.slice(0, -1) : s))
     setNavKey(k => k + 1)
   }
+
+  // Mutate the top frame's tab without triggering a nav animation
+  const updateTab = (tab: number) =>
+    setNavStack(s => s.map((f, i) => i === s.length - 1 ? { ...f, tab } as NavFrame : f))
 
   const playAndGo = (queue: ReturnType<typeof albumQueue>, idx: number) => {
     pb.play(queue, idx)
@@ -67,9 +74,10 @@ export function App() {
     case 'collection':
       body = (
         <Collection
-          initialTab={current.tab}
-          onOpenArtist={(name) => push({ screen: 'artist', name })}
-          onOpenAlbum={(album) => push({ screen: 'album', album })}
+          tab={current.tab}
+          onTabChange={updateTab}
+          onOpenArtist={(name) => push({ screen: 'artist', name, tab: 0 })}
+          onOpenAlbum={(album) => push({ screen: 'album', album, tab: 0 })}
           onOpenGenre={(genre) => push({ screen: 'genre', genre })}
           onOpenPlaylist={(playlist) => push({ screen: 'playlist', playlist })}
           onPlay={playAndGo}
@@ -82,7 +90,9 @@ export function App() {
       body = (
         <ArtistCard
           name={current.name}
-          onOpenAlbum={(album) => push({ screen: 'album', album })}
+          tab={current.tab}
+          onTabChange={updateTab}
+          onOpenAlbum={(album) => push({ screen: 'album', album, tab: 0 })}
           onPlay={playAndGo}
           onBack={back}
         />
@@ -93,6 +103,8 @@ export function App() {
       body = (
         <AlbumDetail
           album={current.album}
+          tab={current.tab}
+          onTabChange={updateTab}
           onPlay={playAndGo}
           onBack={back}
         />
@@ -103,7 +115,7 @@ export function App() {
       body = (
         <GenreDetail
           genre={current.genre}
-          onOpenArtist={(name) => push({ screen: 'artist', name })}
+          onOpenArtist={(name) => push({ screen: 'artist', name, tab: 0 })}
           onPlay={playAndGo}
           onBack={back}
         />
@@ -130,7 +142,7 @@ export function App() {
       {showSettings && (
         <Settings theme={theme} onClose={() => setShowSettings(false)} />
       )}
-      <div className="screen-in" key={navKey}>
+      <div className={`screen-in screen-${navDir}`} key={navKey}>
         {body}
       </div>
     </div>

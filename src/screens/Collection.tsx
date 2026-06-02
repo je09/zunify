@@ -1,6 +1,6 @@
 import {
   Track, Album, Playlist, SongEntry,
-  GENRES, PLAYLISTS,
+  GENRES,
   albumQueue, artistQueue, resolvePlaylistTrack,
 } from '../data'
 import { useLibrary } from '../LibraryContext'
@@ -21,7 +21,7 @@ interface Props {
 }
 
 export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpenGenre, onOpenPlaylist, onPlay, onBack }: Props) {
-  const { albums, artists, songs, loading } = useLibrary()
+  const { albums, artists, songs, playlists, loading, error } = useLibrary()
   const swipe = useSwipe(
     () => tab === 0 ? onBack() : onTabChange(tab - 1),
     () => onTabChange(Math.min(TABS.length - 1, tab + 1)),
@@ -35,6 +35,14 @@ export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpen
     )
   }
 
+  if (error) {
+    return (
+      <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c', padding: 32, textAlign: 'center' }}>
+        failed to load library: {error}
+      </div>
+    )
+  }
+
   return (
     <div className="page">
       <Pivot tabs={TABS} active={tab} onChange={onTabChange} />
@@ -43,7 +51,7 @@ export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpen
         <AlbumsTab albums={albums} onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
         <SongsTab songs={songs} onPlay={onPlay} />
         <GenresTab onOpenGenre={onOpenGenre} />
-        <PlaylistsTab onOpenPlaylist={onOpenPlaylist} />
+        <PlaylistsTab playlists={playlists} onOpenPlaylist={onOpenPlaylist} />
         <RadioTab artists={artists} albums={albums} onPlay={onPlay} />
       </PivotArea>
       <BottomBack onBack={onBack} />
@@ -161,11 +169,13 @@ function GenresTab({ onOpenGenre }: { onOpenGenre: (g: string) => void }) {
 }
 
 // ── Playlists ────────────────────────────────────────────────────────────────
-function PlaylistsTab({ onOpenPlaylist }: { onOpenPlaylist: (pl: Playlist) => void }) {
+function PlaylistsTab({ playlists, onOpenPlaylist }: { playlists: Playlist[]; onOpenPlaylist: (pl: Playlist) => void }) {
   return (
     <div className="pl-list">
-      {PLAYLISTS.map((pl) => {
-        const cols = pl.items.slice(0, 4).map((it) => resolvePlaylistTrack(it).color)
+      {playlists.map((pl) => {
+        const tracks = pl.tracks ?? pl.items.map(it => resolvePlaylistTrack(it))
+        const cols = tracks.slice(0, 4).map(t => t.color)
+        const count = tracks.length || pl.items.length
         while (cols.length < 4) cols.push(cols[cols.length - 1] ?? '#444')
         return (
           <div key={pl.id} className="pl-row" onClick={() => onOpenPlaylist(pl)}>
@@ -174,7 +184,7 @@ function PlaylistsTab({ onOpenPlaylist }: { onOpenPlaylist: (pl: Playlist) => vo
             </div>
             <div className="pl-meta">
               <div className="pl-name">{pl.name}</div>
-              <div className="pl-count">{pl.items.length} songs</div>
+              <div className="pl-count">{count} songs</div>
             </div>
           </div>
         )

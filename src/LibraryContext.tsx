@@ -1,15 +1,18 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import {
-  Album, ALBUMS, ARTISTS, SONGS, SongEntry,
+  Album, Playlist, SongEntry,
   buildArtists, buildSongs,
+  ALBUMS, ARTISTS, SONGS, PLAYLISTS,
 } from './data'
-import { fetchSavedAlbums } from './spotifyApi'
+import { fetchSavedAlbums, fetchLikedSongsPlaylist, fetchUserPlaylists } from './spotifyApi'
 
 export interface Library {
   albums: Album[]
   artists: string[]
   songs: SongEntry[]
+  playlists: Playlist[]
   loading: boolean
+  error: string | null
   source: 'static' | 'spotify'
 }
 
@@ -17,8 +20,21 @@ const DEFAULT: Library = {
   albums: ALBUMS,
   artists: ARTISTS,
   songs: SONGS,
+  playlists: PLAYLISTS,
   loading: false,
+  error: null,
   source: 'static',
+}
+
+// When Spotify auth exists but library hasn't loaded yet — show empty, not mockup
+const EMPTY: Library = {
+  albums: [],
+  artists: [],
+  songs: [],
+  playlists: [],
+  loading: true,
+  error: null,
+  source: 'spotify',
 }
 
 const LibraryContext = createContext<Library>(DEFAULT)
@@ -37,19 +53,28 @@ export function LibraryProvider({ token, children }: Props) {
       setLib(DEFAULT)
       return
     }
-    setLib(prev => ({ ...prev, loading: true }))
-    fetchSavedAlbums()
-      .then(albums => {
+
+    setLib(EMPTY)
+
+    Promise.all([
+      fetchSavedAlbums(),
+      fetchLikedSongsPlaylist(),
+      fetchUserPlaylists(),
+    ])
+      .then(([albums, likedPlaylist, userPlaylists]) => {
         setLib({
           albums,
           artists: buildArtists(albums),
           songs: buildSongs(albums),
+          playlists: [likedPlaylist, ...userPlaylists],
           loading: false,
+          error: null,
           source: 'spotify',
         })
       })
-      .catch(() => {
-        setLib({ ...DEFAULT, loading: false })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err)
+        setLib(prev => ({ ...prev, loading: false, error: msg }))
       })
   }, [token])
 

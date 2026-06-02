@@ -1,4 +1,4 @@
-import { Album } from './data'
+import { Album, Track, Playlist } from './data'
 import { getValidToken } from './spotifyAuth'
 
 // ── Typed fetch wrapper ───────────────────────────────────────────────────────
@@ -12,6 +12,17 @@ async function spGet<T>(path: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
+async function spGetAll<T>(first: string): Promise<T[]> {
+  const items: T[] = []
+  let cursor: string | null = first
+  while (cursor) {
+    const page: SpPaged<T> = await spGet<SpPaged<T>>(cursor)
+    items.push(...page.items)
+    cursor = page.next
+  }
+  return items
+}
+
 // ── Spotify response shapes ───────────────────────────────────────────────────
 
 interface SpImage { url: string }
@@ -22,18 +33,27 @@ interface SpTrack {
   duration_ms: number
   preview_url: string | null
   artists: SpArtist[]
+  album: SpSimpleAlbum
 }
-interface SpAlbum {
+interface SpSimpleAlbum {
   id: string
   name: string
-  release_date: string
   images: SpImage[]
   artists: SpArtist[]
-  tracks: { items: SpTrack[] }
+}
+interface SpAlbum extends SpSimpleAlbum {
+  release_date: string
+  tracks: { items: Omit<SpTrack, 'album'>[] }
 }
 interface SpPaged<T> { items: T[]; next: string | null }
+interface SpSimplePlaylist {
+  id: string
+  name: string
+  tracks: { total: number }
+  images: SpImage[]
+}
 
-// ── Mapper: Spotify album → local Album ──────────────────────────────────────
+// ── Mappers ───────────────────────────────────────────────────────────────────
 
 function mapAlbum(a: SpAlbum): Album {
   return {
@@ -49,17 +69,53 @@ function mapAlbum(a: SpAlbum): Album {
   }
 }
 
+function mapTrack(t: SpTrack): Track {
+  return {
+    title: t.name,
+    dur: Math.round(t.duration_ms / 1000),
+    artist: t.artists[0]?.name ?? 'Unknown',
+    album: t.album.name,
+    color: '#555',
+    imageUrl: t.album.images[0]?.url,
+    previewUrl: t.preview_url ?? undefined,
+    spotifyUri: t.uri,
+  }
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function fetchSavedAlbums(): Promise<Album[]> {
-  const albums: Album[] = []
-  let cursor: string | null = '/me/albums?limit=50'
-  while (cursor) {
-    const page: SpPaged<{ album: SpAlbum }> = await spGet<SpPaged<{ album: SpAlbum }>>(cursor)
-    for (const { album } of page.items) albums.push(mapAlbum(album))
-    cursor = page.next
+  const items = await spGetAll<{ album: SpAlbum }>('/me/albums?limit=50')
+  return items.map(({ album }) => mapAlbum(album))
+}
+
+export async function fetchLikedSongsPlaylist(): Promise<Playlist> {
+  const items = await spGetAll<{ track: SpTrack }>('/me/tracks?limit=50')
+  return {
+    id: 'sp_liked',
+    name: 'liked songs',
+    items: [],
+    tracks: items.map(({ track }) => mapTrack(track)),
   }
-  return albums
+}
+
+export async function fetchUserPlaylists(): Promise<Playlist[]> {
+  const playlists = await spGetAll<SpSimplePlaylist>('/me/playlists?limit=50')
+  return Promise.all(
+    playlists.map(async (pl): Promise<Playlist> => {
+      const trackItems = await spGetAll<{ track: SpTrack | null }>(
+        `/playlists/${pl.id}/tracks?limit=100&fields=items(track(uri,name,duration_ms,preview_url,artists,album(name,images))),next`
+      )
+      return {
+        id: pl.id,
+        name: pl.name,
+        items: [],
+        tracks: trackItems
+          .filter(it => it.track !== null)
+          .map(it => mapTrack(it.track!)),
+      }
+    })
+  )
 }
 
 export async function fetchAlbum(id: string): Promise<Album> {

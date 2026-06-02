@@ -1,21 +1,21 @@
-import { useState } from 'react'
 import { Track, Album, artistAlbums, albumQueue } from '../data'
-import { Pivot, Section, Thumb, useSwipe, BottomBack } from '../components/Pivot'
+import { Pivot, PivotArea, Section, Thumb, useSwipe, BottomBack } from '../components/Pivot'
 import { Icons } from '../components/icons'
 
 interface Props {
   name: string
+  tab: number
+  onTabChange: (t: number) => void
   onOpenAlbum: (album: Album) => void
   onPlay: (queue: Track[], idx: number) => void
   onBack: () => void
 }
 
-export function ArtistCard({ name, onOpenAlbum, onPlay, onBack }: Props) {
-  const [tab, setTab] = useState(0)
+export function ArtistCard({ name, tab, onTabChange, onOpenAlbum, onPlay, onBack }: Props) {
   const albums = artistAlbums(name)
   const swipe = useSwipe(
-    () => tab === 0 ? onBack() : setTab(0),
-    () => setTab(1),
+    () => tab === 0 ? onBack() : onTabChange(0),
+    () => onTabChange(1),
   )
 
   return (
@@ -25,9 +25,10 @@ export function ArtistCard({ name, onOpenAlbum, onPlay, onBack }: Props) {
       <div className="card-scrim" />
       <div className="card-body">
         <div className="artist-heading">{name}</div>
-        <Pivot tabs={['albums', 'songs']} active={tab} onChange={setTab} />
-        {tab === 0 ? (
-          <div className="scroll" {...swipe}>
+        <Pivot tabs={['albums', 'songs']} active={tab} onChange={onTabChange} />
+        <PivotArea tab={tab} {...swipe}>
+          {/* albums */}
+          <div style={{ padding: '0 26px' }}>
             <Section>in collection</Section>
             <div className="card-albums-grid">
               {albums.map((a) => (
@@ -45,8 +46,8 @@ export function ArtistCard({ name, onOpenAlbum, onPlay, onBack }: Props) {
             </div>
             <div style={{ height: 80 }} />
           </div>
-        ) : (
-          <div className="scroll" {...swipe}>
+          {/* songs */}
+          <div>
             {albums.flatMap((a) =>
               a.tracks.map(([title], i) => (
                 <div key={a.id + i} className="lrow" style={{ padding: '8px 26px' }}>
@@ -66,7 +67,7 @@ export function ArtistCard({ name, onOpenAlbum, onPlay, onBack }: Props) {
             )}
             <div style={{ height: 80 }} />
           </div>
-        )}
+        </PivotArea>
       </div>
       <BottomBack onBack={onBack} />
     </div>

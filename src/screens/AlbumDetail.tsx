@@ -1,25 +1,26 @@
-import { useState } from 'react'
 import { Track, Album, albumQueue, fmt } from '../data'
-import { Pivot, Thumb, useSwipe, BottomBack } from '../components/Pivot'
+import { Pivot, PivotArea, Thumb, useSwipe, BottomBack } from '../components/Pivot'
 
 interface Props {
   album: Album
+  tab: number
+  onTabChange: (t: number) => void
   onPlay: (queue: Track[], idx: number) => void
   onBack: () => void
 }
 
-export function AlbumDetail({ album, onPlay, onBack }: Props) {
-  const [tab, setTab] = useState(0)
+export function AlbumDetail({ album, tab, onTabChange, onPlay, onBack }: Props) {
   const swipe = useSwipe(
-    () => tab === 0 ? onBack() : setTab(0),
-    () => setTab(1),
+    () => tab === 0 ? onBack() : onTabChange(0),
+    () => onTabChange(1),
   )
 
   return (
     <div className="page">
-      <Pivot tabs={['songs', 'review']} active={tab} onChange={setTab} />
-      {tab === 0 ? (
-        <div className="scroll" {...swipe}>
+      <Pivot tabs={['songs', 'review']} active={tab} onChange={onTabChange} />
+      <PivotArea tab={tab} {...swipe}>
+        {/* songs */}
+        <div>
           <div className="al-head">
             <Thumb color={album.color} size={132} imageUrl={album.imageUrl} />
             <div className="al-head-meta">
@@ -44,21 +45,19 @@ export function AlbumDetail({ album, onPlay, onBack }: Props) {
             <div style={{ height: 80 }} />
           </div>
         </div>
-      ) : (
-        <div className="scroll" {...swipe}>
-          <div className="review">
-            <Thumb color={album.color} size={132} imageUrl={album.imageUrl} />
-            <p className="review-body">
-              {album.artist} &mdash; <em>{album.title}</em> ({album.year}).{' '}
-              {album.tracks.length} tracks, indexed locally and ready to play offline.
-            </p>
-            <div className="stars">
-              {'★★★★'.split('').map((s, i) => <span key={i}>{s}</span>)}
-              <span className="dim">☆</span>
-            </div>
+        {/* review */}
+        <div className="review">
+          <Thumb color={album.color} size={132} imageUrl={album.imageUrl} />
+          <p className="review-body">
+            {album.artist} &mdash; <em>{album.title}</em> ({album.year}).{' '}
+            {album.tracks.length} tracks, indexed locally and ready to play offline.
+          </p>
+          <div className="stars">
+            {'★★★★'.split('').map((s, i) => <span key={i}>{s}</span>)}
+            <span className="dim">☆</span>
           </div>
         </div>
-      )}
+      </PivotArea>
       <BottomBack onBack={onBack} />
     </div>
   )

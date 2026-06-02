@@ -1,5 +1,8 @@
 /* ── Reset ──────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* No selection anywhere except explicit input fields */
+* { -webkit-user-select: none; user-select: none; }
+input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; }
 html, body { height: 100%; }
 body {
   font-family: "Segoe UI", "Segoe WP", "Helvetica Neue", Arial, sans-serif;
@@ -27,6 +30,9 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  /* Prevent browser swipe-back/forward from stealing our gesture events in PWA */
+  touch-action: pan-y;
+  overscroll-behavior: none;
 }
 
 /* ── Themes ─────────────────────────────────────────────────────────────── */
@@ -45,12 +51,56 @@ body {
 /* ── Screen wrapper (fills app-shell flex column) ───────────────────────── */
 .screen-in { flex: 1; overflow: hidden; position: relative; }
 
-/* ── Screen entrance animation ──────────────────────────────────────────── */
+/* ── Windows Phone Turnstile + item cascade ─────────────────────────────── */
 @media (prefers-reduced-motion: no-preference) {
-  .screen-in { animation: screenIn .34s cubic-bezier(.2,.7,.3,1); }
-  @keyframes screenIn { from { transform: translateX(24px); } to { transform: none; } }
+
+  /* --- Turnstile forward (push): page swings in from right, pivots left --- */
+  .screen-fwd {
+    transform-origin: left center;
+    animation: turnstileIn 300ms ease-in-out both;
+  }
+  @keyframes turnstileIn {
+    from { transform: perspective(600px) rotateY(-60deg); opacity: 0; }
+    to   { transform: perspective(600px) rotateY(0deg);   opacity: 1; }
+  }
+
+  /* --- Turnstile back (pop): page swings in from left, pivots right --- */
+  .screen-back {
+    transform-origin: right center;
+    animation: turnstileBack 280ms ease-in-out both;
+  }
+  @keyframes turnstileBack {
+    from { transform: perspective(600px) rotateY(60deg);  opacity: 0; }
+    to   { transform: perspective(600px) rotateY(0deg);   opacity: 1; }
+  }
+
+  /* --- Now-playing text/art swap on track change --- */
   .swap { animation: rise .32s cubic-bezier(.2,.7,.3,1); }
-  @keyframes rise { from { transform: translateY(12px); } to { transform: none; } }
+  @keyframes rise { from { transform: translateY(12px); opacity: .4; } to { transform: none; opacity: 1; } }
+
+  /* --- Item cascade: list items slide up and fade in ---------------------- */
+  :is(.llist, .song-list, .album-list, .card-albums-grid, .pl-list, .track-list, .llist ~ div) > * {
+    animation: itemIn 250ms cubic-bezier(.2,.75,.3,1) both;
+  }
+  @keyframes itemIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* Stagger: base 80ms then +38ms per item, first 12 items */
+  :is(.llist,.song-list,.album-list,.card-albums-grid,.pl-list,.track-list) > :nth-child(1)  { animation-delay:  80ms; }
+  :is(.llist,.song-list,.album-list,.card-albums-grid,.pl-list,.track-list) > :nth-child(2)  { animation-delay: 118ms; }
+  :is(.llist,.song-list,.album-list,.card-albums-grid,.pl-list,.track-list) > :nth-child(3)  { animation-delay: 156ms; }
+  :is(.llist,.song-list,.album-list,.card-albums-grid,.pl-list,.track-list) > :nth-child(4)  { animation-delay: 194ms; }
+  :is(.llist,.song-list,.album-list,.card-albums-grid,.pl-list,.track-list) > :nth-child(5)  { animation-delay: 232ms; }
+  :is(.llist,.song-list,.album-list,.card-albums-grid,.pl-list,.track-list) > :nth-child(6)  { animation-delay: 270ms; }
+  :is(.llist,.song-list,.album-list,.card-albums-grid,.pl-list,.track-list) > :nth-child(7)  { animation-delay: 308ms; }
+  :is(.llist,.song-list,.album-list,.card-albums-grid,.pl-list,.track-list) > :nth-child(8)  { animation-delay: 346ms; }
+  :is(.llist,.song-list,.album-list,.card-albums-grid,.pl-list,.track-list) > :nth-child(9)  { animation-delay: 384ms; }
+  :is(.llist,.song-list,.album-list,.card-albums-grid,.pl-list,.track-list) > :nth-child(10) { animation-delay: 422ms; }
+  :is(.llist,.song-list,.album-list,.card-albums-grid,.pl-list,.track-list) > :nth-child(11) { animation-delay: 460ms; }
+  :is(.llist,.song-list,.album-list,.card-albums-grid,.pl-list,.track-list) > :nth-child(12) { animation-delay: 498ms; }
+  :is(.llist,.song-list,.album-list,.card-albums-grid,.pl-list,.track-list) > :nth-child(n+13) { animation-delay: 80ms; }
 }
 
 /* ── Page wrapper ────────────────────────────────────────────────────────── */
@@ -120,10 +170,37 @@ body {
 .scroll {
   flex: 1; overflow-y: auto; overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;   /* vertical-pan native; horizontal captured by useSwipe */
+  touch-action: pan-y;
   scrollbar-width: none;
 }
 .scroll::-webkit-scrollbar { display: none; }
+
+/* ── PivotArea — sliding tab container ───────────────────────────────────── */
+.pivot-area {
+  flex: 1; position: relative; overflow: hidden;
+  touch-action: pan-y;
+}
+.pivot-pane {
+  position: absolute; inset: 0;
+  overflow-y: auto; overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.pivot-pane::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Forward (tab index up = slide left) */
+  .pivot-exit-fwd  { animation: pivotExitL  240ms ease-out forwards; }
+  .pivot-enter-fwd { animation: pivotEnterR 240ms ease-out forwards; }
+  /* Back (tab index down = slide right) */
+  .pivot-exit-back  { animation: pivotExitR  240ms ease-out forwards; }
+  .pivot-enter-back { animation: pivotEnterL 240ms ease-out forwards; }
+
+  @keyframes pivotExitL  { to   { transform: translateX(-100%); } }
+  @keyframes pivotEnterR { from { transform: translateX(100%);  } to { transform: none; } }
+  @keyframes pivotExitR  { to   { transform: translateX(100%);  } }
+  @keyframes pivotEnterL { from { transform: translateX(-100%); } to { transform: none; } }
+}
 
 /* ── Section label ───────────────────────────────────────────────────────── */
 .section {
@@ -133,10 +210,15 @@ body {
 
 /* ── Progress bar ────────────────────────────────────────────────────────── */
 .progress { margin-top: 26px; }
+/* bar-touch: 28px tall hit area (invisible) so touch is reliable */
+.bar-touch {
+  padding: 12px 0;
+  cursor: pointer;
+  touch-action: none;
+}
 .bar {
   height: 4px; background: var(--line);
-  position: relative; cursor: pointer;
-  touch-action: none; /* required for pointer capture on touch */
+  position: relative;
 }
 .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); }
 .times {

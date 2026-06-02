@@ -1,4 +1,5 @@
 import { Track, Album, artistAlbums, albumQueue } from '../data'
+import { useLibrary } from '../LibraryContext'
 import { Pivot, PivotArea, Section, Thumb, useSwipe, BottomBack } from '../components/Pivot'
 import { Icons } from '../components/icons'
 
@@ -12,7 +13,8 @@ interface Props {
 }
 
 export function ArtistCard({ name, tab, onTabChange, onOpenAlbum, onPlay, onBack }: Props) {
-  const albums = artistAlbums(name)
+  const { albums: allAlbums } = useLibrary()
+  const albums = artistAlbums(name, allAlbums)
   const swipe = useSwipe(
     () => tab === 0 ? onBack() : onTabChange(0),
     () => onTabChange(1),

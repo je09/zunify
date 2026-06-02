@@ -37,6 +37,7 @@ export interface Playlist {
   id: string;
   name: string;
   items: { a: string; i: number }[];
+  tracks?: Track[]; // pre-resolved (Spotify playlists skip items[])
 }
 
 export const ALBUMS: Album[] = [
@@ -443,7 +444,8 @@ export function resolvePlaylistTrack(it: { a: string; i: number }): Track {
 }
 
 export function playlistQueue(pl: Playlist): Track[] {
-  return pl.items.map(resolvePlaylistTrack);
+  if (pl.tracks) return pl.tracks
+  return pl.items.map(resolvePlaylistTrack)
 }
 
 export function fmt(s: number): string {

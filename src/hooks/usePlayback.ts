@@ -87,6 +87,20 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     const s = spotify.sdkState
     setTime(s.position / 1000)
     setPlaying(!s.paused)
+
+    // SDK overwrites media session with "Spotify Embedded Player" — override it
+    if ('mediaSession' in navigator) {
+      const ct = s.track_window.current_track
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: ct.name,
+        artist: ct.artists.map(a => a.name).join(', '),
+        album: ct.album.name,
+        artwork: ct.album.images[0]
+          ? [{ src: ct.album.images[0].url, sizes: '300x300', type: 'image/jpeg' }]
+          : [],
+      })
+    }
+
     const uri = s.track_window.current_track.uri
     const newIdx = queue.findIndex(t => t.spotifyUri === uri)
     if (newIdx !== -1 && newIdx !== idx) setIdx(newIdx)

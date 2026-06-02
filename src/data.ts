@@ -38,6 +38,8 @@ export interface Playlist {
   name: string;
   items: { a: string; i: number }[];
   tracks?: Track[]; // pre-resolved (Spotify playlists skip items[])
+  totalTracks?: number;
+  trackNextUrl?: string | null;
 }
 
 export const ALBUMS: Album[] = [

@@ -4,8 +4,24 @@ export const SPOTIFY_SCOPES = [
   'streaming',
   'user-read-email',
   'user-read-private',
-  'user-library-read',
+
+  'user-read-playback-state',
   'user-modify-playback-state',
+  'user-read-currently-playing',
+  'user-read-playback-position',
+  'user-read-recently-played',
+
+  'user-library-read',
+  'user-library-modify',
+
+  'user-top-read',
+  'user-follow-read',
+  'user-follow-modify',
+
+  'playlist-read-private',
+  'playlist-read-collaborative',
+  'playlist-modify-public',
+  'playlist-modify-private',
 ].join(' ')
 
 const TOKEN_KEY = 'sp_tokens'

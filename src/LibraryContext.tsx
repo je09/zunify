@@ -1,7 +1,8 @@
 import { createContext, useContext, useReducer, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react'
+import type { ArtistSummary } from './data'
 import {
   fetchSavedAlbumsPage, fetchUserPlaylistsPage, fetchLikedTracksPage,
-  fetchPlaylistTracksPage, fetchCurrentUser, fetchFollowedArtists, SpotifyArtist,
+  fetchPlaylistTracksPage, fetchCurrentUser, fetchFollowedArtists,
 } from './spotifyApi'
 import { libraryReducer } from './features/library/libraryReducer'
 import { buildLibrary, likedSongsPlaylist } from './features/library/librarySelectors'
@@ -41,7 +42,7 @@ export function LibraryProvider({ token, children }: Props) {
   const loadingPlaylistTracksRef = useRef<Record<string, boolean>>({})
   const playlistsRef = useRef(lib.playlists)
   const userIdRef = useRef<string | null>(null)
-  const followedArtistsRef = useRef<SpotifyArtist[]>([])
+  const followedArtistsRef = useRef<ArtistSummary[]>([])
   const requestGenRef = useRef(0)
 
   const loadMore = useCallback((kind: LibraryPageKind) => {
@@ -183,7 +184,7 @@ export function LibraryProvider({ token, children }: Props) {
       fetchSavedAlbumsPage(),
       fetchUserPlaylistsPage(),
       fetchLikedTracksPage('/me/tracks?limit=1'),
-      fetchFollowedArtists(50).catch(() => [] as SpotifyArtist[]),
+      fetchFollowedArtists(50).catch(() => [] as ArtistSummary[]),
     ]).then(([user, albumPage, playlistPage, likedPage, followed]) => {
       if (cancelled) return
       userIdRef.current = user.id

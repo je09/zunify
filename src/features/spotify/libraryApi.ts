@@ -42,26 +42,6 @@ export async function fetchPlaylistTracksPage(playlistId: string, cursor?: strin
   }
 }
 
-export async function fetchSavedAlbums(): Promise<Album[]> {
-  return (await fetchSavedAlbumsPage()).items
-}
-
-export async function fetchLikedSongsPlaylist(): Promise<Playlist> {
-  const page = await fetchLikedTracksPage()
-  return {
-    id: 'sp_liked',
-    name: 'liked songs',
-    items: [],
-    tracks: page.items,
-    totalTracks: page.total ?? page.items.length,
-    trackNextUrl: page.next,
-  }
-}
-
-export async function fetchUserPlaylists(): Promise<Playlist[]> {
-  return (await fetchUserPlaylistsPage()).items
-}
-
 export async function fetchAlbum(id: string): Promise<Album | null> {
   return mapAlbum(await spotifyGet<SpAlbum>(`/albums/${id}`))
 }
@@ -80,12 +60,4 @@ export async function saveTracks(ids: string[]): Promise<void> {
 
 export async function removeTracks(ids: string[]): Promise<void> {
   return spotifyMutate('DELETE', '/me/tracks', { ids })
-}
-
-export async function saveAlbums(ids: string[]): Promise<void> {
-  return spotifyMutate('PUT', '/me/albums', { ids })
-}
-
-export async function removeAlbums(ids: string[]): Promise<void> {
-  return spotifyMutate('DELETE', '/me/albums', { ids })
 }

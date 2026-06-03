@@ -1,5 +1,4 @@
-import { Album, Playlist, Track, buildArtists, buildSongs, artistIdByName as buildArtistIdMap } from '../../data'
-import type { SpotifyArtist } from '../spotify/types'
+import { Album, ArtistSummary, Playlist, Track, buildArtists, buildSongs, artistIdByName as buildArtistIdMap } from '../../data'
 import { LibraryState, LibraryTotals } from './libraryTypes'
 
 export function likedSongsPlaylist(tracks: Track[], total?: number | null): Playlist {
@@ -16,7 +15,7 @@ export function buildLibrary(
   playlists: Playlist[],
   totals: LibraryTotals,
   userId: string | null,
-  followedArtists: SpotifyArtist[] = [],
+  followedArtists: ArtistSummary[] = [],
 ): LibraryState {
   const likedPlaylist = playlists.find(pl => pl.id === 'sp_liked')
   const liked = likedPlaylist?.tracks ?? []

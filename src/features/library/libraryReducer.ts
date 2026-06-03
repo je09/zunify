@@ -1,5 +1,4 @@
-import { Playlist } from '../../data'
-import type { SpotifyArtist } from '../spotify/types'
+import { ArtistSummary, Playlist } from '../../data'
 import { buildLibrary, likedSongsPlaylist, mergeAlbums, mergePlaylists, mergeTracks } from './librarySelectors'
 import { EMPTY_LIBRARY_STATE, LibraryPageKind, LibraryState, LibraryTotals } from './libraryTypes'
 
@@ -10,10 +9,10 @@ export type LibraryAction =
   | { type: 'set-error'; error: string; loading?: boolean }
   | { type: 'set-loading-more'; kind: LibraryPageKind; loading: boolean }
   | { type: 'set-playlist-tracks-loading'; playlistId: string; loading: boolean }
-  | { type: 'append-albums'; items: LibraryState['albums']; total: number | null; userId: string | null; followedArtists: SpotifyArtist[] }
-  | { type: 'append-liked-tracks'; items: LibraryState['playlists'][number]['tracks']; total: number | null; next: string | null; userId: string | null; followedArtists: SpotifyArtist[] }
-  | { type: 'append-playlists'; items: Playlist[]; total: number | null; likedTotal: number | null | undefined; userId: string | null; followedArtists: SpotifyArtist[] }
-  | { type: 'append-playlist-tracks'; playlistId: string; items: LibraryState['playlists'][number]['tracks']; total: number | null; next: string | null; userId: string | null; followedArtists: SpotifyArtist[] }
+  | { type: 'append-albums'; items: LibraryState['albums']; total: number | null; userId: string | null; followedArtists: ArtistSummary[] }
+  | { type: 'append-liked-tracks'; items: LibraryState['playlists'][number]['tracks']; total: number | null; next: string | null; userId: string | null; followedArtists: ArtistSummary[] }
+  | { type: 'append-playlists'; items: Playlist[]; total: number | null; likedTotal: number | null | undefined; userId: string | null; followedArtists: ArtistSummary[] }
+  | { type: 'append-playlist-tracks'; playlistId: string; items: LibraryState['playlists'][number]['tracks']; total: number | null; next: string | null; userId: string | null; followedArtists: ArtistSummary[] }
 
 export function libraryReducer(state: LibraryState, action: LibraryAction): LibraryState {
   switch (action.type) {

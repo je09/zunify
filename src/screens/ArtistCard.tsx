@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Track, Album, fmt } from '../data'
-import { SpotifyArtist, fetchArtist, fetchArtistTopTracks, fetchArtistAlbums, checkSavedTracks } from '../spotifyApi'
+import { Track, Album, ArtistSummary, fmt } from '../data'
+import { fetchArtist, fetchArtistTopTracks, fetchArtistAlbums, checkSavedTracks } from '../spotifyApi'
 import { Pivot, PivotArea, Thumb, useSwipe, BottomBack } from '../components/Pivot'
 import { Icons } from '../components/icons'
 
@@ -15,7 +15,7 @@ interface Props {
 }
 
 interface ArtistState {
-  artist: SpotifyArtist | null
+  artist: ArtistSummary | null
   topTracks: Track[]
   albums: Album[]
   singles: Album[]
@@ -64,7 +64,7 @@ export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPl
 
   const { artist, topTracks, albums, singles, savedTrackIds, loading } = state
 
-  const bgImage = artist?.images?.[0]?.url
+  const bgImage = artist?.imageUrl
   const displayName = artist?.name ?? name
   const contextUri = artistId ? `spotify:artist:${artistId}` : undefined
 

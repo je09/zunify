@@ -52,19 +52,13 @@ export interface SpPlayHistory {
   played_at: string
   context: { type: string; uri: string } | null
 }
-export interface SpotifyArtist {
+export interface SpFullArtist {
   id: string
   name: string
   genres: string[]
   popularity: number
   images: SpImage[]
   followers: { total: number }
-}
-export type SpFullArtist = SpotifyArtist
-export interface SpCategory {
-  id: string
-  name: string
-  icons: SpImage[]
 }
 export interface SpUser {
   id: string

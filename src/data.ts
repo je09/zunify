@@ -23,6 +23,12 @@ export interface Album {
   spotifyTrackPreviews?: (string | undefined)[]
 }
 
+export interface ArtistSummary {
+  id: string
+  name: string
+  imageUrl?: string
+}
+
 export type SongEntry = { title: string; dur: number; artist: string; album: Album; idx: number }
 
 export interface Playlist {

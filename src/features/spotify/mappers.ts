@@ -1,5 +1,5 @@
-import { Album, Track } from '../../data'
-import { SpAlbum, SpSimpleAlbum2, SpTrack } from './types'
+import { Album, ArtistSummary, Track } from '../../data'
+import { SpAlbum, SpFullArtist, SpSimpleAlbum2, SpTrack } from './types'
 
 export function mapAlbum(a: SpAlbum): Album | null {
   if (!a.tracks) return null
@@ -28,6 +28,10 @@ export function mapSimpleAlbum(a: SpSimpleAlbum2): Album {
     imageUrl: a.images?.[0]?.url,
     tracks: [],
   }
+}
+
+export function mapArtist(a: SpFullArtist): ArtistSummary {
+  return { id: a.id, name: a.name, imageUrl: a.images?.[0]?.url }
 }
 
 export function mapTrack(t: SpTrack | null): Track | null {

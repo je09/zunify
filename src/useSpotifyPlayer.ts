@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { getValidToken } from './features/auth/spotifyAuth'
+import { setShuffleState, startPlayback, transferPlayback } from './features/spotify/playerApi'
 
 // ── Engine abstraction ────────────────────────────────────────────────────────
 
@@ -74,59 +75,30 @@ export function useSpotifyPlayer(
       player.addListener('ready', ({ device_id }) => {
         if (!live) return
 
-        // Transfer playback to this device on ready — same as thirdparty webPlayback.tsx
-        void getValidToken().then(token => {
-          if (!token || !live) return
-          fetch('https://api.spotify.com/v1/me/player', {
-            method: 'PUT',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device_ids: [device_id] }),
-          }).catch(() => {})
-        })
+        void transferPlayback(device_id).catch(e => onError?.(`Spotify transfer failed: ${e instanceof Error ? e.message : String(e)}`))
 
-        const putPlay = async (token: string, body: string): Promise<void> => {
-          const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-          const res = await fetch(
-            `https://api.spotify.com/v1/me/player/play?device_id=${device_id}`,
-            { method: 'PUT', headers, body }
-          )
-          if (res.status === 404) {
-            await fetch('https://api.spotify.com/v1/me/player', {
-              method: 'PUT', headers,
-              body: JSON.stringify({ device_ids: [device_id] }),
-            })
-            await new Promise(r => setTimeout(r, 400))
-            await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device_id}`, { method: 'PUT', headers, body })
-          }
-        }
-
-        const startPlayback = async (uris: string[], offsetIndex: number): Promise<void> => {
+        const playUris = async (uris: string[], offsetIndex: number): Promise<void> => {
           const token = await getValidToken()
           if (!token || uris.length === 0) return
-          await putPlay(token, JSON.stringify({ uris, offset: { position: Math.max(0, offsetIndex) } }))
+          await startPlayback({ uris, offset: { position: Math.max(0, offsetIndex) } }, device_id)
         }
 
-        const startPlaybackContext = async (contextUri: string, offsetPosition: number): Promise<void> => {
+        const playContext = async (contextUri: string, offsetPosition: number): Promise<void> => {
           const token = await getValidToken()
           if (!token || !contextUri) return
-          await putPlay(token, JSON.stringify({ context_uri: contextUri, offset: { position: Math.max(0, offsetPosition) } }))
+          await startPlayback({ context_uri: contextUri, offset: { position: Math.max(0, offsetPosition) } }, device_id)
         }
 
         const setShuffle = async (state: boolean): Promise<void> => {
-          const token = await getValidToken()
-          if (!token) return
-          await fetch(
-            `https://api.spotify.com/v1/me/player/shuffle?state=${state}&device_id=${device_id}`,
-            { method: 'PUT', headers: { Authorization: `Bearer ${token}` } }
-          )
+          await setShuffleState(state, device_id)
         }
 
         setEngine(prev => ({
           player,
           deviceId: device_id,
           sdkState: prev?.sdkState ?? null,
-          startPlayback,
-          startPlaybackContext,
+          startPlayback: playUris,
+          startPlaybackContext: playContext,
           setShuffle,
         }))
       })

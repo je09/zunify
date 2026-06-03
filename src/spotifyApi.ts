@@ -1,4 +1,3 @@
-export type { SpotifyArtist, SpUser } from './features/spotify/types'
 export { LIBRARY_BATCH_LIMIT, TRACK_BATCH_LIMIT } from './features/spotify/shared'
 export type { SpotifyPage } from './features/spotify/shared'
 export * from './features/spotify/libraryApi'

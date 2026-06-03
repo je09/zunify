@@ -3,9 +3,9 @@ import { getValidToken } from '../auth/spotifyAuth'
 import { SPOTIFY_API_BASE, spotifyGet, spotifyMutate } from './client'
 import { mapTrack } from './mappers'
 import { spotifyPage, SpotifyPage } from './shared'
-import type { SpDevice, SpPlaybackState, SpPlayHistory, SpTrack } from './types'
+import type { SpPlaybackState, SpPlayHistory, SpTrack } from './types'
 
-export async function fetchPlaybackState(): Promise<SpPlaybackState | null> {
+async function fetchPlaybackState(): Promise<SpPlaybackState | null> {
   const token = await getValidToken()
   if (!token) throw new Error('not_authenticated')
   const res = await fetch(`${SPOTIFY_API_BASE}/me/player`, { headers: { Authorization: `Bearer ${token}` } })
@@ -39,14 +39,35 @@ export async function transferPlayback(deviceId: string, play = false): Promise<
   return spotifyMutate('PUT', '/me/player', { device_ids: [deviceId], play })
 }
 
-export async function getAvailableDevices(): Promise<SpDevice[]> {
-  const data = await spotifyGet<{ devices: SpDevice[] }>('/me/player/devices')
-  return data.devices
+async function spotifyDeviceRequest(method: 'PUT', path: string, deviceId: string, body?: unknown): Promise<Response> {
+  const token = await getValidToken()
+  if (!token) throw new Error('not_authenticated')
+  const url = new URL(`${SPOTIFY_API_BASE}${path}`)
+  url.searchParams.set('device_id', deviceId)
+  return fetch(url.toString(), {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  })
 }
 
 export async function startPlayback(
-  body: { context_uri?: string; uris?: string[]; offset?: { position: number } } = {}
+  body: { context_uri?: string; uris?: string[]; offset?: { position: number } } = {},
+  deviceId?: string,
 ): Promise<void> {
+  if (deviceId) {
+    let res = await spotifyDeviceRequest('PUT', '/me/player/play', deviceId, body)
+    if (res.status === 404) {
+      await transferPlayback(deviceId)
+      await new Promise(r => setTimeout(r, 400))
+      res = await spotifyDeviceRequest('PUT', '/me/player/play', deviceId, body)
+    }
+    if (!res.ok) throw new Error(`spotify_${res.status}`)
+    return
+  }
   return spotifyMutate('PUT', '/me/player/play', body)
 }
 
@@ -70,16 +91,8 @@ export async function setRepeatMode(state: 'track' | 'context' | 'off'): Promise
   return spotifyMutate('PUT', '/me/player/repeat', undefined, { state })
 }
 
-export async function setPlayerVolume(volume_percent: number): Promise<void> {
-  return spotifyMutate('PUT', '/me/player/volume', undefined, { volume_percent })
-}
-
-export async function setShuffleState(state: boolean): Promise<void> {
-  return spotifyMutate('PUT', '/me/player/shuffle', undefined, { state })
-}
-
-export async function addToQueue(uri: string): Promise<void> {
-  return spotifyMutate('POST', '/me/player/queue', undefined, { uri })
+export async function setShuffleState(state: boolean, deviceId?: string): Promise<void> {
+  return spotifyMutate('PUT', '/me/player/shuffle', undefined, deviceId ? { state, device_id: deviceId } : { state })
 }
 
 export async function getRecentlyPlayed(params: { limit?: number; after?: number; before?: number } = {}): Promise<SpotifyPage<{ track: Track; playedAt: string }>> {

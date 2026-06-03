@@ -173,37 +173,53 @@ interface ProgressBarProps {
 }
 
 export function ProgressBar({ pct, onSeek }: ProgressBarProps) {
-  const barRef  = useRef<HTMLDivElement>(null)
+  const barRef   = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
+  const [dragPct, setDragPct] = useState<number | null>(null)
 
-  const seek = (e: React.PointerEvent) => {
-    if (!barRef.current) return
+  const getFraction = (e: React.PointerEvent) => {
+    if (!barRef.current) return null
     const r = barRef.current.getBoundingClientRect()
-    onSeek(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)))
+    return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width))
   }
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation()
     e.currentTarget.setPointerCapture(e.pointerId)
     dragging.current = true
-    seek(e)
+    const f = getFraction(e)
+    if (f !== null) setDragPct(f * 100)
   }
-  const onPointerMove   = (e: React.PointerEvent<HTMLDivElement>) => { if (dragging.current) seek(e) }
-  const onPointerUp     = () => { dragging.current = false }
-  const onPointerCancel = () => { dragging.current = false }
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging.current) return
+    const f = getFraction(e)
+    if (f !== null) setDragPct(f * 100)
+  }
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging.current) return
+    dragging.current = false
+    const f = getFraction(e)
+    setDragPct(null)
+    if (f !== null) onSeek(f)
+  }
+  const onPointerCancel = () => { dragging.current = false; setDragPct(null) }
+
+  const displayPct = dragPct !== null ? dragPct : pct
 
   return (
     <div className="progress">
       {/* bar-touch expands the hit area to 28px so touch is reliable */}
+      {/* touch-action:none prevents iOS from treating horizontal drag as back gesture */}
       <div
         className="bar-touch"
+        style={{ touchAction: 'none' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
       >
         <div ref={barRef} className="bar">
-          <div className="fill" style={{ width: pct + '%' }} />
+          <div className="fill" style={{ width: displayPct + '%' }} />
         </div>
       </div>
     </div>

@@ -146,7 +146,18 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     const onTimeUpdate = () => setLocalTime(audio.currentTime)
     const onEnded = () => {
       if (localRepeatRef.current === 2) { audio.currentTime = 0; void audio.play(); return }
-      setLocalIdx(i => (i + 1) % localQueueRef.current.length)
+      const queue   = localQueueRef.current
+      const nextIdx = (localIdxRef.current + 1) % queue.length
+      const nextTrack = queue[nextIdx]
+      // Directly drive audio using refs — React effects are suspended on iOS
+      // when the app is backgrounded, so we can't rely on the src-sync effect.
+      if (nextTrack?.previewUrl) {
+        audio.src = nextTrack.previewUrl
+        audio.load()
+        gestureDidPlayRef.current = true  // prevent src-sync effect from overwriting on foreground
+        void audio.play()
+      }
+      setLocalIdx(nextIdx)
       setLocalTime(0)
     }
     audio.addEventListener('timeupdate', onTimeUpdate)
@@ -277,14 +288,31 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
 
   const next = useCallback(() => {
     if (inSdk) { void skipToNext(); return }
-    setLocalIdx(i => (i + 1) % localQueueRef.current.length); setLocalTime(0)
+    const queue   = localQueueRef.current
+    const nextIdx = (localIdxRef.current + 1) % queue.length
+    const nextTrack = queue[nextIdx]
+    if (nextTrack?.previewUrl) {
+      audioRef.current.src = nextTrack.previewUrl
+      audioRef.current.load()
+      gestureDidPlayRef.current = true
+      if (localPlayingRef.current) void audioRef.current.play()
+    }
+    setLocalIdx(nextIdx); setLocalTime(0)
   }, [inSdk])
 
   const prev = useCallback(() => {
     if (inSdk) { void skipToPrevious(); return }
     if (localTime > 3) { setLocalTime(0); audioRef.current.currentTime = 0; return }
-    setLocalIdx(i => (i - 1 + localQueueRef.current.length) % localQueueRef.current.length)
-    setLocalTime(0)
+    const queue   = localQueueRef.current
+    const prevIdx = (localIdxRef.current - 1 + queue.length) % queue.length
+    const prevTrack = queue[prevIdx]
+    if (prevTrack?.previewUrl) {
+      audioRef.current.src = prevTrack.previewUrl
+      audioRef.current.load()
+      gestureDidPlayRef.current = true
+      if (localPlayingRef.current) void audioRef.current.play()
+    }
+    setLocalIdx(prevIdx); setLocalTime(0)
   }, [inSdk, localTime])
 
   const seek = useCallback((fraction: number) => {

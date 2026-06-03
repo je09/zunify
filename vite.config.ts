@@ -18,8 +18,9 @@ export default defineConfig({
       orientation: 'portrait',
       start_url: '/',
       icons: [
-        { src: 'icons/icon-192.svg', sizes: '192x192', type: 'image/svg+xml' },
-        { src: 'icons/icon-512.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' },
+        { src: 'icons/icon-192.svg', sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
+        { src: 'icons/icon-512.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any' },
+        { src: 'icons/icon-512.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'maskable' },
       ],
     },
     devOptions: {
@@ -33,6 +34,16 @@ export default defineConfig({
           urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
           handler: 'CacheFirst',
           options: { cacheName: 'google-fonts', expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 } },
+        },
+        {
+          urlPattern: /^https:\/\/i\.scdn\.co\/.*/i,
+          handler: 'CacheFirst',
+          options: { cacheName: 'spotify-images', expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 } },
+        },
+        {
+          urlPattern: /^https:\/\/mosaic\.scdn\.co\/.*/i,
+          handler: 'CacheFirst',
+          options: { cacheName: 'spotify-images', expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 } },
         },
       ],
     },

@@ -33,7 +33,7 @@ export function Player({ pb, onBack }: Props) {
 
         <div className="artrow">
           <div className="art swap" key={'a' + idx} style={{ background: track.color }}>
-            {track.imageUrl && <img src={track.imageUrl} alt="" />}
+            {track.imageUrl && <img src={track.imageUrl} alt="" decoding="async" />}
           </div>
           <div className="sideicons">
             <button className={'iconbtn ' + (isLiked ? 'on' : 'outline')} onClick={toggleFav} aria-label="Favourite">

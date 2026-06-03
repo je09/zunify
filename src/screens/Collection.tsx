@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
   Track, Album, Playlist, SongEntry,
   GENRES,
@@ -141,7 +141,10 @@ interface AlbumsProps {
 }
 
 function AlbumsTab({ albums, total, loadingMore, onLoadMore, onOpenArtist, onOpenAlbum }: AlbumsProps) {
-  const sorted = [...albums].sort((a, b) => a.title.localeCompare(b.title, 'en', { sensitivity: 'base' }))
+  const sorted = useMemo(
+    () => [...albums].sort((a, b) => a.title.localeCompare(b.title, 'en', { sensitivity: 'base' })),
+    [albums]
+  )
   return (
     <div className="album-list">
       {sorted.map((a) => (
@@ -163,10 +166,11 @@ function AlbumsTab({ albums, total, loadingMore, onLoadMore, onOpenArtist, onOpe
 
 // ── Songs ────────────────────────────────────────────────────────────────────
 function SongsTab({ songs, likedTrackUris, hasMore, loadingMore, onLoadMore, onPlay }: { songs: SongEntry[]; likedTrackUris: Set<string>; hasMore: boolean; loadingMore: boolean; onLoadMore: () => void; onPlay: (q: Track[], i: number) => void }) {
-  // Filter out songs with no title (can happen with local Spotify files).
-  // Build queue from valid entries so shuffle/next spans the full songs list.
-  const validSongs = songs.filter(s => s.title)
-  const allTracks: Track[] = validSongs.map(s => albumQueue(s.album)[s.idx]).filter(Boolean) as Track[]
+  const validSongs = useMemo(() => songs.filter(s => s.title), [songs])
+  const allTracks = useMemo<Track[]>(
+    () => validSongs.map(s => albumQueue(s.album)[s.idx]).filter(Boolean) as Track[],
+    [validSongs]
+  )
 
   return (
     <div className="song-list">

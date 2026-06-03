@@ -235,6 +235,6 @@ export function Thumb({ color, size, imageUrl }: ThumbProps) {
     : { width: size, height: size, objectFit: 'cover', display: 'block' }
 
   return imageUrl
-    ? <img className="thumb" src={imageUrl} alt="" style={imgStyle} />
+    ? <img className="thumb" src={imageUrl} alt="" style={imgStyle} loading="lazy" decoding="async" />
     : <div className="thumb" style={boxStyle} />
 }

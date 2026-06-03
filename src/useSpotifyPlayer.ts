@@ -13,6 +13,7 @@ export interface SpotifyEngine {
   deviceId: string
   sdkState: Spotify.PlaybackState | null
   startPlayback: (uris: string[], offsetIndex: number) => Promise<void>
+  setShuffle: (state: boolean) => Promise<void>
 }
 
 // ── SDK loader (singleton) ────────────────────────────────────────────────────
@@ -99,11 +100,21 @@ export function useSpotifyPlayer(
           }
         }
 
+        const setShuffle = async (state: boolean): Promise<void> => {
+          const token = await getValidToken()
+          if (!token) return
+          await fetch(
+            `https://api.spotify.com/v1/me/player/shuffle?state=${state}&device_id=${device_id}`,
+            { method: 'PUT', headers: { Authorization: `Bearer ${token}` } }
+          )
+        }
+
         setEngine(prev => ({
           player,
           deviceId: device_id,
           sdkState: prev?.sdkState ?? null,
           startPlayback,
+          setShuffle,
         }))
       })
 

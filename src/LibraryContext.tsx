@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react'
 import {
   Album, Playlist, SongEntry, Track,
   buildArtists, buildSongs,
@@ -159,7 +159,14 @@ function readSpotifyLibraryCache(): SpotifyLibraryCache | null {
 
 function writeSpotifyLibraryCache(lib: SpotifyLibraryCache) {
   try {
-    localStorage.setItem(SPOTIFY_LIBRARY_CACHE_KEY, JSON.stringify(lib))
+    // Strip expiring CDN preview URLs — they expire, pointless to store.
+    // Strip playlist tracks — can be 300KB+ for liked songs; load on demand.
+    const stripped: SpotifyLibraryCache = {
+      ...lib,
+      albums: lib.albums.map(({ spotifyTrackPreviews: _, ...a }) => a),
+      playlists: lib.playlists.map(({ tracks: _, ...pl }) => ({ ...pl, items: pl.items ?? [] })),
+    }
+    localStorage.setItem(SPOTIFY_LIBRARY_CACHE_KEY, JSON.stringify(stripped))
   } catch {
     // Ignore quota/private-mode failures; live Spotify data still works.
   }
@@ -421,47 +428,6 @@ export function LibraryProvider({ token, children }: Props) {
     setLib({ ...EMPTY, loading: true })
     loadMore('albums')
     loadMore('playlists')
-  }, [token, loadMore])
-
-  // ── Background sync ────────────────────────────────────────────────────────
-  // After the initial cache snapshot is shown, continue fetching remaining
-  // pages in the background at a controlled rate (350 ms between requests).
-  // Uses the same loadMore machinery so loading-ref guards prevent duplicates.
-  // Sequential by kind (albums → playlists → tracks) to stay well under
-  // Spotify's rate limit without a separate token bucket.
-  useEffect(() => {
-    if (!token) return
-    let cancelled = false
-
-    const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
-
-    async function drainKind(
-      kind: LibraryPageKind,
-      loadingRef: React.MutableRefObject<boolean>,
-      nextRef:    React.MutableRefObject<string | null | undefined>,
-    ) {
-      while (!cancelled && nextRef.current !== null) {
-        if (loadingRef.current) { await sleep(200); continue }
-        loadMore(kind)
-        // Wait for the fetch to start (ref flips to true)
-        await sleep(100)
-        // Wait for the fetch to finish (ref flips back to false)
-        while (!cancelled && loadingRef.current) await sleep(200)
-        // Respectful pause before next request
-        if (!cancelled) await sleep(350)
-      }
-    }
-
-    async function sync() {
-      // Give the initial render time to settle before starting.
-      await sleep(600)
-      await drainKind('albums',    loadingAlbumsRef,    nextAlbumsRef)
-      await drainKind('playlists', loadingPlaylistsRef, nextPlaylistsRef)
-      await drainKind('tracks',    loadingTracksRef,    nextTracksRef)
-    }
-
-    void sync()
-    return () => { cancelled = true }
   }, [token, loadMore])
 
   // Keep ref in sync so loadMorePlaylistTracks always sees current playlists.

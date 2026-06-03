@@ -58,10 +58,13 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const lastRef    = useRef(0)
 
   // Refs for values used inside closures that must never be stale.
-  const repeatRef  = useRef<0 | 1 | 2>(0)
-  const shuffleRef = useRef(false)
-  const queueRef   = useRef(queue)
-  const playingRef = useRef(false)
+  const repeatRef        = useRef<0 | 1 | 2>(0)
+  const shuffleRef       = useRef(false)
+  const queueRef         = useRef(queue)
+  const idxRef           = useRef(0)
+  const originalQueueRef = useRef<Track[]>([])
+  const spotifyRef       = useRef<SpotifyEngine | null | undefined>(undefined)
+  const playingRef       = useRef(false)
   // Stable refs to latest callbacks — used by Media Session handlers so they
   // don't need to be re-registered on every dep change.
   const nextCbRef   = useRef<() => void>(() => {})
@@ -75,6 +78,8 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   repeatRef.current  = repeat
   shuffleRef.current = shuffle
   queueRef.current   = queue
+  idxRef.current     = idx
+  spotifyRef.current = spotify
   playingRef.current = playing
   trackRef.current   = queue[idx] ?? queue[0]
 
@@ -86,16 +91,10 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     : 'raf'
 
   // ── advanceQueue ──────────────────────────────────────────────────────────
+  // Always linear — when shuffle is on, the queue is pre-shuffled so linear
+  // traversal gives shuffle without repeats and with proper next/prev support.
   const advanceQueue = useCallback(() => {
-    setIdx(i => {
-      const q = queueRef.current
-      if (shuffleRef.current) {
-        let n: number
-        do { n = Math.floor(Math.random() * q.length) } while (n === i && q.length > 1)
-        return n
-      }
-      return (i + 1) % q.length
-    })
+    setIdx(i => (i + 1) % queueRef.current.length)
     setTime(0)
   }, [])
 
@@ -297,13 +296,34 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const play = useCallback((q: Track[], i: number) => {
     if (q.length === 0) return
     const t = q[i]
-    setQueue(q)
-    setIdx(i)
+    const isSDK = Boolean(spotifyRef.current && t?.spotifyUri)
+
+    // For SDK engine, Spotify handles shuffle server-side — send original URIs
+    // and re-apply shuffle state after start. For non-SDK, pre-shuffle locally
+    // so "Up Next" is accurate and traversal is linear with no repeats.
+    let activeQueue = q
+    let activeIdx   = i
+    if (!isSDK && shuffleRef.current) {
+      const rest = q.filter((_, ri) => ri !== i)
+      for (let j = rest.length - 1; j > 0; j--) {
+        const k = Math.floor(Math.random() * (j + 1))
+        ;[rest[j], rest[k]] = [rest[k], rest[j]]
+      }
+      originalQueueRef.current = q
+      activeQueue = [t, ...rest]
+      activeIdx   = 0
+    } else {
+      originalQueueRef.current = isSDK && shuffleRef.current ? q : []
+    }
+
+    setQueue(activeQueue)
+    setIdx(activeIdx)
     setTime(0)
     setPlaying(true)
     setStarted(true)
 
-    if (spotify && t?.spotifyUri) {
+    if (isSDK && spotifyRef.current) {
+      const sp      = spotifyRef.current
       const allUris = q.flatMap(t => t.spotifyUri ? [t.spotifyUri] : [])
       const offsetInAll = q.slice(0, i).filter(t => t.spotifyUri).length
       // Spotify rejects bodies over ~1 MB (413). Cap at 300 URIs, starting
@@ -314,7 +334,11 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
         ...allUris.slice(offsetInAll),
         ...allUris.slice(0, offsetInAll),
       ].slice(0, MAX)
-      void spotify.startPlayback(windowUris, 0)
+      // Re-apply shuffle after start — starting playback with uris resets
+      // Spotify's shuffle state to off regardless of what it was before.
+      void sp.startPlayback(windowUris, 0).then(() => {
+        if (shuffleRef.current) void sp.setShuffle(true)
+      })
     } else if (t?.previewUrl) {
       // Call play() synchronously in the user-gesture call stack.
       // iOS blocks audio.play() once we cross an async boundary (useEffect
@@ -380,22 +404,38 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const toggleShuffle = useCallback(() => {
     setShuffle(prev => {
       const next = !prev
+
+      // For SDK engine Spotify controls actual playback order server-side —
+      // setShuffle makes Spotify reshuffle its own queue. Our local manipulation
+      // below only drives the "Up Next" display.
+      void spotifyRef.current?.setShuffle(next)
+
       if (next) {
-        // Physically shuffle tracks after the current position so UP NEXT
-        // immediately reflects the shuffled order (Fisher-Yates in-place).
-        setQueue(q => {
-          const curIdx = queueRef.current === q ? idx : 0
-          const after = [...q.slice(curIdx + 1)]
-          for (let i = after.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1))
-            ;[after[i], after[j]] = [after[j], after[i]]
-          }
-          return [...q.slice(0, curIdx + 1), ...after]
-        })
+        // Save original order, build shuffled queue with current track pinned first.
+        // Traversal stays linear so every track plays exactly once before repeating.
+        originalQueueRef.current = queueRef.current
+        const cur  = queueRef.current[idxRef.current]
+        const rest = queueRef.current.filter((_, i) => i !== idxRef.current)
+        for (let i = rest.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1))
+          ;[rest[i], rest[j]] = [rest[j], rest[i]]
+        }
+        setQueue([cur, ...rest])
+        setIdx(0)
+      } else {
+        // Restore original queue; keep playback position on the current track.
+        const orig = originalQueueRef.current
+        if (orig.length > 0) {
+          const cur    = queueRef.current[idxRef.current]
+          const newIdx = orig.indexOf(cur)
+          setQueue(orig)
+          setIdx(newIdx >= 0 ? newIdx : 0)
+          originalQueueRef.current = []
+        }
       }
       return next
     })
-  }, [idx])
+  }, [])
 
   // Keep Media Session handler refs pointing to the latest callbacks.
   nextCbRef.current = next

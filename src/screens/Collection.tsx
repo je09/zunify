@@ -1,28 +1,23 @@
 import { useEffect, useMemo, useRef } from 'react'
-import {
-  Track, Album, Playlist, SongEntry,
-  GENRES,
-  albumQueue, artistQueue, resolvePlaylistTrack,
-} from '../data'
+import { Track, Album, Playlist, SongEntry, albumQueue } from '../data'
 import { useLibrary } from '../LibraryContext'
 import { Pivot, PivotArea, Section, Thumb, useSwipe, BottomBack } from '../components/Pivot'
 import { Icons } from '../components/icons'
 
-const TABS = ['artists', 'albums', 'songs', 'genres', 'playlists', 'radio']
+const TABS = ['artists', 'albums', 'songs', 'playlists']
 
 interface Props {
   tab: number
   onTabChange: (t: number) => void
-  onOpenArtist: (name: string) => void
+  onOpenArtist: (name: string, artistId?: string) => void
   onOpenAlbum: (album: Album) => void
-  onOpenGenre: (genre: string) => void
   onOpenPlaylist: (pl: Playlist) => void
-  onPlay: (queue: Track[], idx: number) => void
+  onPlay: (queue: Track[], idx: number, contextUri?: string) => void
   onBack: () => void
 }
 
-export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpenGenre, onOpenPlaylist, onPlay, onBack }: Props) {
-  const { albums, artists, songs, playlists, likedTrackUris, loading, loadingMore, error, totals, loadMore } = useLibrary()
+export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpenPlaylist, onPlay, onBack }: Props) {
+  const { albums, artists, songs, playlists, likedTrackUris, loading, loadingMore, error, totals, loadMore, artistIdByName } = useLibrary()
   const swipe = useSwipe(
     () => tab === 0 ? onBack() : onTabChange(tab - 1),
     () => onTabChange(Math.min(TABS.length - 1, tab + 1)),
@@ -32,35 +27,23 @@ export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpen
 
   useEffect(() => {
     if (loading) return
-    if ((tab === 1 || tab === 5) && albums.length < 20 && hasMore(albums.length, totals.albums) && !loadingMore.albums) {
-      loadMore('albums')
-    }
-    if ((tab === 0 || tab === 2) && likedTrackCount < 50 && hasMore(likedTrackCount, totals.songs) && !loadingMore.tracks) {
-      loadMore('tracks')
-    }
-    if (tab === 4 && userPlaylistCount < 20 && hasMore(userPlaylistCount, totals.playlists) && !loadingMore.playlists) {
-      loadMore('playlists')
-    }
+    if (tab === 1 && hasMore(albums.length, totals.albums) && !loadingMore.albums) loadMore('albums')
+    if (tab === 0 && likedTrackCount < 50 && hasMore(likedTrackCount, totals.songs) && !loadingMore.tracks) loadMore('tracks')
+    if (tab === 2 && likedTrackCount < 50 && hasMore(likedTrackCount, totals.songs) && !loadingMore.tracks) loadMore('tracks')
+    if (tab === 3 && userPlaylistCount < 20 && hasMore(userPlaylistCount, totals.playlists) && !loadingMore.playlists) loadMore('playlists')
   }, [tab, albums.length, totals.albums, likedTrackCount, totals.songs, userPlaylistCount, totals.playlists, loading, loadingMore.albums, loadingMore.tracks, loadingMore.playlists, loadMore])
 
-  if (loading) {
-    return <WP8Loading />
-  }
-
-  if (error) {
-    return <WP8Error message={error} />
-  }
+  if (loading) return <WP8Loading />
+  if (error) return <WP8Error message={error} />
 
   return (
     <div className="page">
       <Pivot tabs={TABS} active={tab} onChange={onTabChange} />
       <PivotArea tab={tab} ref={swipe}>
-        <ArtistsTab artists={artists} albums={albums} hasMore={hasMore(albums.length, totals.albums)} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onPlay={onPlay} />
-        <AlbumsTab albums={albums} total={totals.albums} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
+        <ArtistsTab artists={artists} albums={albums} artistIdByName={artistIdByName} hasMore={hasMore(albums.length, totals.albums)} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onPlay={onPlay} />
+        <AlbumsTab albums={albums} total={totals.albums} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} artistIdByName={artistIdByName} />
         <SongsTab songs={songs} likedTrackUris={likedTrackUris} hasMore={hasMore(likedTrackCount, totals.songs)} loadingMore={loadingMore.tracks} onLoadMore={() => loadMore('tracks')} onPlay={onPlay} />
-        <GenresTab onOpenGenre={onOpenGenre} />
         <PlaylistsTab playlists={playlists} total={totals.playlists} loadingMore={loadingMore.playlists} onLoadMore={() => loadMore('playlists')} onOpenPlaylist={onOpenPlaylist} />
-        <RadioTab artists={artists} albums={albums} onPlay={onPlay} />
       </PivotArea>
       <BottomBack onBack={onBack} />
     </div>
@@ -73,42 +56,36 @@ function hasMore(loaded: number, total: number | null): boolean {
 
 function LoadMoreSentinel({ active, loading, onLoadMore }: { active: boolean; loading: boolean; onLoadMore: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     const el = ref.current
     if (!active || !el) return
-
     const observer = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting && !loading) onLoadMore()
     }, { rootMargin: '240px 0px' })
-
     observer.observe(el)
     return () => observer.disconnect()
   }, [active, loading, onLoadMore])
-
   return <div ref={ref} style={{ height: 80, color: '#888', paddingTop: 16 }}>{loading ? 'loading more...' : ''}</div>
 }
 
 // ── Artists ──────────────────────────────────────────────────────────────────
-interface ArtistsProps {
-  artists: string[]
-  albums: Album[]
-  hasMore: boolean
-  loadingMore: boolean
-  onLoadMore: () => void
-  onOpenArtist: (n: string) => void
-  onPlay: (q: Track[], i: number) => void
-}
-
-function ArtistsTab({ artists, albums, hasMore, loadingMore, onLoadMore, onOpenArtist, onPlay }: ArtistsProps) {
+function ArtistsTab({ artists, albums, artistIdByName, hasMore, loadingMore, onLoadMore, onOpenArtist, onPlay }: {
+  artists: string[]; albums: Album[]; artistIdByName: Map<string, string>
+  hasMore: boolean; loadingMore: boolean; onLoadMore: () => void
+  onOpenArtist: (n: string, id?: string) => void
+  onPlay: (q: Track[], i: number, ctx?: string) => void
+}) {
   let prevLetter = ''
   return (
     <div className="llist">
       <Section>all music</Section>
       {artists.map((name) => {
-        const letter = name.replace(/^the\s+/i, '')[0].toUpperCase()
+        const letter = name.replace(/^the\s+/i, '')[0]?.toUpperCase() ?? '#'
         const showTile = letter !== prevLetter
         prevLetter = letter
+        const artistId = artistIdByName.get(name)
+        const artistAlbums = albums.filter(a => a.artist === name)
+        const queue = artistAlbums.flatMap(albumQueue)
         return (
           <div key={name}>
             {showTile && <div className="index-tile">{letter}</div>}
@@ -116,11 +93,11 @@ function ArtistsTab({ artists, albums, hasMore, loadingMore, onLoadMore, onOpenA
               <button
                 className="play-circle"
                 aria-label={`Play ${name}`}
-                onClick={(e) => { e.stopPropagation(); onPlay(artistQueue(name, albums), 0) }}
+                onClick={(e) => { e.stopPropagation(); if (queue.length) onPlay(queue, 0) }}
               >
                 {Icons.playCircle}
               </button>
-              <div className="lrow-name" onClick={() => onOpenArtist(name)}>{name}</div>
+              <div className="lrow-name" onClick={() => onOpenArtist(name, artistId)}>{name}</div>
             </div>
           </div>
         )
@@ -131,16 +108,11 @@ function ArtistsTab({ artists, albums, hasMore, loadingMore, onLoadMore, onOpenA
 }
 
 // ── Albums ───────────────────────────────────────────────────────────────────
-interface AlbumsProps {
-  albums: Album[]
-  total: number | null
-  loadingMore: boolean
-  onLoadMore: () => void
-  onOpenArtist: (n: string) => void
-  onOpenAlbum: (a: Album) => void
-}
-
-function AlbumsTab({ albums, total, loadingMore, onLoadMore, onOpenArtist, onOpenAlbum }: AlbumsProps) {
+function AlbumsTab({ albums, total, loadingMore, onLoadMore, onOpenArtist, onOpenAlbum, artistIdByName }: {
+  albums: Album[]; total: number | null; loadingMore: boolean; onLoadMore: () => void
+  onOpenArtist: (n: string, id?: string) => void; onOpenAlbum: (a: Album) => void
+  artistIdByName: Map<string, string>
+}) {
   const sorted = useMemo(
     () => [...albums].sort((a, b) => a.title.localeCompare(b.title, 'en', { sensitivity: 'base' })),
     [albums]
@@ -149,12 +121,12 @@ function AlbumsTab({ albums, total, loadingMore, onLoadMore, onOpenArtist, onOpe
     <div className="album-list">
       {sorted.map((a) => (
         <div key={a.id} className="album-group">
-          <div className="group-head" onClick={() => onOpenArtist(a.artist)}>{a.artist}</div>
+          <div className="group-head" onClick={() => onOpenArtist(a.artist, artistIdByName.get(a.artist))}>{a.artist}</div>
           <div className="album-row" onClick={() => onOpenAlbum(a)}>
             <Thumb color={a.color} size={88} imageUrl={a.imageUrl} />
             <div className="album-meta">
               <div className="al-title">{a.title}</div>
-              <div className="al-year">{a.year}</div>
+              <div className="al-year">{a.year || ''}</div>
             </div>
           </div>
         </div>
@@ -165,13 +137,15 @@ function AlbumsTab({ albums, total, loadingMore, onLoadMore, onOpenArtist, onOpe
 }
 
 // ── Songs ────────────────────────────────────────────────────────────────────
-function SongsTab({ songs, likedTrackUris, hasMore, loadingMore, onLoadMore, onPlay }: { songs: SongEntry[]; likedTrackUris: Set<string>; hasMore: boolean; loadingMore: boolean; onLoadMore: () => void; onPlay: (q: Track[], i: number) => void }) {
+function SongsTab({ songs, likedTrackUris, hasMore, loadingMore, onLoadMore, onPlay }: {
+  songs: SongEntry[]; likedTrackUris: Set<string>; hasMore: boolean; loadingMore: boolean
+  onLoadMore: () => void; onPlay: (q: Track[], i: number) => void
+}) {
   const validSongs = useMemo(() => songs.filter(s => s.title), [songs])
   const allTracks = useMemo<Track[]>(
     () => validSongs.map(s => albumQueue(s.album)[s.idx]).filter(Boolean) as Track[],
     [validSongs]
   )
-
   return (
     <div className="song-list">
       {validSongs.map((s, i) => {
@@ -204,35 +178,24 @@ function SongsTab({ songs, likedTrackUris, hasMore, loadingMore, onLoadMore, onP
   )
 }
 
-// ── Genres ───────────────────────────────────────────────────────────────────
-function GenresTab({ onOpenGenre }: { onOpenGenre: (g: string) => void }) {
-  return (
-    <div className="llist">
-      <Section>all music</Section>
-      {GENRES.map((g) => (
-        <div key={g} className="genre-item" onClick={() => onOpenGenre(g)}>{g}</div>
-      ))}
-      <div style={{ height: 80 }} />
-    </div>
-  )
-}
-
 // ── Playlists ────────────────────────────────────────────────────────────────
-function PlaylistsTab({ playlists, total, loadingMore, onLoadMore, onOpenPlaylist }: { playlists: Playlist[]; total: number | null; loadingMore: boolean; onLoadMore: () => void; onOpenPlaylist: (pl: Playlist) => void }) {
+function PlaylistsTab({ playlists, total, loadingMore, onLoadMore, onOpenPlaylist }: {
+  playlists: Playlist[]; total: number | null; loadingMore: boolean
+  onLoadMore: () => void; onOpenPlaylist: (pl: Playlist) => void
+}) {
   const loadedUserPlaylists = playlists.filter(pl => pl.id !== 'sp_liked').length
-
   return (
     <div className="pl-list">
       {playlists.map((pl) => {
-        const tracks = pl.tracks ?? (pl.items ?? []).map(it => resolvePlaylistTrack(it))
-        const cols = tracks.slice(0, 4).map(t => t.color)
-        const count = pl.totalTracks ?? (tracks.length || pl.items.length)
-        while (cols.length < 4) cols.push(cols[cols.length - 1] ?? '#444')
+        const count = pl.totalTracks ?? pl.tracks?.length ?? 0
         return (
-            <div key={pl.id} className="pl-row" onClick={() => onOpenPlaylist(pl)}>
-              <div className="pl-mosaic">
-                {pl.imageUrl ? <img src={pl.imageUrl} alt="" /> : cols.map((c, i) => <span key={i} style={{ background: c }} />)}
-              </div>
+          <div key={pl.id} className="pl-row" onClick={() => onOpenPlaylist(pl)}>
+            <div className="pl-mosaic">
+              {pl.imageUrl
+                ? <img src={pl.imageUrl} alt="" />
+                : <div style={{ background: '#333', width: '100%', height: '100%' }} />
+              }
+            </div>
             <div className="pl-meta">
               <div className="pl-name">{pl.name}</div>
               <div className="pl-count">{count} songs</div>
@@ -245,33 +208,6 @@ function PlaylistsTab({ playlists, total, loadingMore, onLoadMore, onOpenPlaylis
   )
 }
 
-// ── Radio ────────────────────────────────────────────────────────────────────
-interface RadioProps { artists: string[]; albums: Album[]; onPlay: (q: Track[], i: number) => void }
-
-function RadioTab({ artists, albums, onPlay }: RadioProps) {
-  return (
-    <div className="llist">
-      <Section>smart dj</Section>
-      {artists.map((name) => (
-        <div key={name} className="lrow">
-          <button
-            className="play-circle"
-            aria-label={`Start ${name} radio`}
-            onClick={(e) => { e.stopPropagation(); onPlay(artistQueue(name, albums), 0) }}
-          >
-            {Icons.playCircle}
-          </button>
-          <div className="lrow-name" onClick={() => onPlay(artistQueue(name, albums), 0)}>
-            {name} radio
-          </div>
-        </div>
-      ))}
-      <div style={{ height: 80 }} />
-    </div>
-  )
-}
-
-// ── WP8-style error screen ───────────────────────────────────────────────────
 function WP8Error({ message }: { message: string }) {
   return (
     <div className="wp8-loading">
@@ -282,7 +218,6 @@ function WP8Error({ message }: { message: string }) {
   )
 }
 
-// ── WP8-style loading screen ─────────────────────────────────────────────────
 function WP8Loading() {
   return (
     <div className="wp8-loading">

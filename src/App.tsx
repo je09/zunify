@@ -8,12 +8,11 @@ import {
   clearTokens, hasStoredTokens,
 } from './spotifyAuth'
 import { getClientId, setClientId, getRedirectUri } from './spotifyConfig'
-import { Album, Playlist, albumQueue } from './data'
+import { Album, Playlist, albumQueue, Track } from './data'
 import { Hub } from './screens/Hub'
 import { Collection } from './screens/Collection'
 import { ArtistCard } from './screens/ArtistCard'
 import { AlbumDetail } from './screens/AlbumDetail'
-import { GenreDetail } from './screens/GenreDetail'
 import { PlaylistDetail } from './screens/PlaylistDetail'
 import { Player } from './screens/Player'
 
@@ -22,13 +21,10 @@ import { Player } from './screens/Player'
 type NavFrame =
   | { screen: 'home' }
   | { screen: 'collection'; tab: number }
-  | { screen: 'artist';     name: string; tab: number }
+  | { screen: 'artist';     name: string; artistId?: string; tab: number }
   | { screen: 'album';      album: Album; tab: number }
-  | { screen: 'genre';      genre: string }
   | { screen: 'playlist';   playlist: Playlist }
   | { screen: 'nowplaying' }
-
-// ── Root — wraps everything in LibraryProvider ────────────────────────────────
 
 export function App() {
   const [token, setToken] = useState<string | null>(null)
@@ -46,7 +42,6 @@ export function App() {
     void init()
   }, [])
 
-  // Refresh token every 4 minutes while logged in
   useEffect(() => {
     if (!token) return
     const id = setInterval(async () => {
@@ -63,15 +58,10 @@ export function App() {
 
   return (
     <LibraryProvider token={token}>
-      <AppContent
-        token={token}
-        onLogout={handleLogout}
-      />
+      <AppContent token={token} onLogout={handleLogout} />
     </LibraryProvider>
   )
 }
-
-// ── App content (inside LibraryProvider) ─────────────────────────────────────
 
 interface ContentProps {
   token: string | null
@@ -101,9 +91,9 @@ function AppContent({ token, onLogout }: ContentProps) {
   const updateTab = (tab: number) =>
     setNavStack(s => s.map((f, i) => i === s.length - 1 ? { ...f, tab } as NavFrame : f))
 
-  const playAndGo = (queue: ReturnType<typeof albumQueue>, idx: number) => {
+  const playAndGo = (queue: Track[], idx: number, contextUri?: string) => {
     if (queue.length === 0) return
-    pb.play(queue, idx)
+    pb.play(queue, idx, contextUri)
     push({ screen: 'nowplaying' })
   }
 
@@ -116,6 +106,8 @@ function AppContent({ token, onLogout }: ContentProps) {
           pb={pb}
           onOpenCollection={(tab) => push({ screen: 'collection', tab })}
           onOpenNowPlaying={() => push({ screen: 'nowplaying' })}
+          onOpenAlbum={(album) => push({ screen: 'album', album, tab: 0 })}
+          onOpenPlaylist={(playlist) => push({ screen: 'playlist', playlist })}
           onShuffle={() => playAndGo(albums.flatMap(albumQueue).sort(() => Math.random() - 0.5), 0)}
           onSettings={() => setShowSettings(true)}
         />
@@ -127,9 +119,8 @@ function AppContent({ token, onLogout }: ContentProps) {
         <Collection
           tab={current.tab}
           onTabChange={updateTab}
-          onOpenArtist={(name) => push({ screen: 'artist', name, tab: 0 })}
+          onOpenArtist={(name, artistId) => push({ screen: 'artist', name, artistId, tab: 0 })}
           onOpenAlbum={(album) => push({ screen: 'album', album, tab: 0 })}
-          onOpenGenre={(genre) => push({ screen: 'genre', genre })}
           onOpenPlaylist={(playlist) => push({ screen: 'playlist', playlist })}
           onPlay={playAndGo}
           onBack={back}
@@ -141,6 +132,7 @@ function AppContent({ token, onLogout }: ContentProps) {
       body = (
         <ArtistCard
           name={current.name}
+          artistId={current.artistId}
           tab={current.tab}
           onTabChange={updateTab}
           onOpenAlbum={(album) => push({ screen: 'album', album, tab: 0 })}
@@ -156,17 +148,8 @@ function AppContent({ token, onLogout }: ContentProps) {
           album={current.album}
           tab={current.tab}
           onTabChange={updateTab}
-          onPlay={playAndGo}
-          onBack={back}
-        />
-      )
-      break
-
-    case 'genre':
-      body = (
-        <GenreDetail
-          genre={current.genre}
-          onOpenArtist={(name) => push({ screen: 'artist', name, tab: 0 })}
+          onOpenAlbum={(album) => push({ screen: 'album', album, tab: 0 })}
+          onOpenArtist={(name, artistId) => push({ screen: 'artist', name, artistId, tab: 0 })}
           onPlay={playAndGo}
           onBack={back}
         />
@@ -207,8 +190,6 @@ function AppContent({ token, onLogout }: ContentProps) {
   )
 }
 
-// ── Settings panel ────────────────────────────────────────────────────────────
-
 interface SettingsProps {
   theme: ReturnType<typeof useTheme>
   token: string | null
@@ -221,9 +202,6 @@ interface SettingsProps {
 function Settings({ theme, token, sdkError, onClearSdkError, onLogout, onClose }: SettingsProps) {
   const [clientId, setClientIdState] = useState(getClientId)
   const [loginError, setLoginError]  = useState('')
-  // Only trust token from App state — hasStoredTokens() can be true even after
-  // a failed refresh (expired refresh token). Showing "connected" in that case
-  // confuses the user since the session is actually dead.
   const loggedIn = Boolean(token)
 
   const handleLogin = async () => {

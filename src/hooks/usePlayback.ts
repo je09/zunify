@@ -1,566 +1,429 @@
 // ---------------------------------------------------------------------------
-// Playback hook — three engine modes:
+// Playback hook — two modes:
 //
-//   'sdk'   — Spotify Web Playback SDK (Premium, full tracks).
-//              Shuffle/repeat/liked state delegated to Spotify server.
-//              Up Next sourced from GET /me/player/queue.
-//              Play context URIs (albums, playlists) for server-managed order.
+//   SDK    — Spotify Web Playback SDK active.
+//            ALL state read directly from sdkState (no local caching).
+//            ALL controls go through REST API (same as thirdparty).
+//            Shuffle/repeat/track/time owned by Spotify server.
 //
-//   'audio' — <audio> element for any URL (preview_url, local MP3).
-//              Shuffle/repeat managed locally. play() in gesture context.
-//
-//   'raf'   — requestAnimationFrame timer simulation (no real audio).
-//              Fallback when neither of the above applies.
+//   Local  — No SDK (no login or no Spotify Premium).
+//            <audio> element for previewUrl, requestAnimationFrame otherwise.
+//            Shuffle/repeat managed client-side.
 // ---------------------------------------------------------------------------
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Track } from "../data";
-import type { SpotifyEngine } from "../useSpotifyPlayer";
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Track } from '../data'
+import type { SpotifyEngine } from '../useSpotifyPlayer'
 import {
   setRepeatMode as setRepeatModeApi,
-  checkSavedTracks,
-  saveTracks,
-  removeTracks,
-  fetchUserQueue,
-} from "../spotifyApi";
+  checkSavedTracks, saveTracks, removeTracks,
+  fetchCurrentPlayback, fetchUserQueue,
+  pausePlayback, startPlayback as startPlaybackApi,
+  skipToNext, skipToPrevious, seekToPosition, setShuffleState,
+} from '../spotifyApi'
 
-export interface UpNextTrack {
-  title: string;
-  artist: string;
-  imageUrl?: string;
-}
+const NULL_TRACK: Track = { title: '', dur: 0, artist: '', album: '', color: '#000' }
+
+export interface UpNextTrack { title: string; artist: string; imageUrl?: string }
 
 export interface PlaybackState {
-  queue: Track[];
-  idx: number;
-  track: Track;
-  upNext: UpNextTrack[]; // 2 upcoming tracks
-  playing: boolean;
-  time: number;
-  fav: boolean;
-  shuffle: boolean;
-  repeat: 0 | 1 | 2; // 0 off · 1 all · 2 one
-  started: boolean;
-  volume: number; // 0–1 fraction
-  prevDisabled: boolean;
-  nextDisabled: boolean;
-  play: (q: Track[], i: number, contextUri?: string) => void;
-  toggle: () => void;
-  next: () => void;
-  prev: () => void;
-  seek: (fraction: number) => void;
-  toggleFav: () => void;
-  toggleShuffle: () => void;
-  cycleRepeat: () => void;
-  setVolume: (fraction: number) => void;
+  track: Track
+  upNext: UpNextTrack[]
+  playing: boolean
+  time: number
+  fav: boolean
+  shuffle: boolean
+  repeat: 0 | 1 | 2
+  started: boolean
+  prevDisabled: boolean
+  nextDisabled: boolean
+  // Local queue exposed for display only (track list screens)
+  queue: Track[]
+  idx: number
+  play: (q: Track[], i: number, contextUri?: string) => void
+  toggle: () => void
+  next: () => void
+  prev: () => void
+  seek: (fraction: number) => void
+  toggleFav: () => void
+  toggleShuffle: () => void
+  cycleRepeat: () => void
 }
 
 export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
-  const [queue, setQueue] = useState<Track[]>([]);
-  const [idx, setIdx] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [time, setTime] = useState(0);
-  const [fav, setFav] = useState(false);
-  const [shuffle, setShuffle] = useState(false);
-  const [repeat, setRepeat] = useState<0 | 1 | 2>(0);
-  const [started, setStarted] = useState(false);
-  const [volume, setVolumeState] = useState(0.8);
-  const [serverUpNext, setServerUpNext] = useState<UpNextTrack[]>([]);
+  // ── Local state — non-SDK mode only ──────────────────────────────────────
+  const [localQueue, setLocalQueue]     = useState<Track[]>([])
+  const [localIdx, setLocalIdx]         = useState(0)
+  const [localPlaying, setLocalPlaying] = useState(false)
+  const [localTime, setLocalTime]       = useState(0)
+  const [localShuffle, setLocalShuffle] = useState(false)
+  const [localRepeat, setLocalRepeat]   = useState<0 | 1 | 2>(0)
+  const [started, setStarted]           = useState(false)
+  const [fav, setFav]                   = useState(false)
 
-  // Persistent audio element — never recreated, src is swapped on track change.
-  const audioRef = useRef<HTMLAudioElement>(new Audio());
-  const rafRef = useRef(0);
-  const lastRef = useRef(0);
+  const audioRef   = useRef<HTMLAudioElement>(new Audio())
+  const rafRef     = useRef(0)
+  const lastRef    = useRef(0)
 
-  // Refs for values used inside closures that must never be stale.
-  const repeatRef = useRef<0 | 1 | 2>(0);
-  const shuffleRef = useRef(false);
-  const queueRef = useRef(queue);
-  const idxRef = useRef(0);
-  const originalQueueRef = useRef<Track[]>([]);
-  const spotifyRef = useRef<SpotifyEngine | null | undefined>(undefined);
-  const playingRef = useRef(false);
-  const favRef = useRef(false);
-  const nextCbRef = useRef<() => void>(() => {});
-  const prevCbRef = useRef<() => void>(() => {});
-  const seekCbRef = useRef<(f: number) => void>(() => {});
-  const trackRef = useRef(queue[0]);
-  const gestureDidPlayRef = useRef(false);
+  const localRepeatRef  = useRef<0 | 1 | 2>(0)
+  const localShuffleRef = useRef(false)
+  const localQueueRef   = useRef(localQueue)
+  const localIdxRef     = useRef(0)
+  const origQueueRef    = useRef<Track[]>([])
+  const spotifyRef      = useRef<SpotifyEngine | null | undefined>(undefined)
+  const localPlayingRef = useRef(false)
+  const favRef          = useRef(false)
+  const nextCbRef       = useRef<() => void>(() => {})
+  const prevCbRef       = useRef<() => void>(() => {})
+  const seekCbRef       = useRef<(f: number) => void>(() => {})
+  const gestureDidPlayRef = useRef(false)
+  const startupSyncRef = useRef(false)
 
-  repeatRef.current = repeat;
-  shuffleRef.current = shuffle;
-  queueRef.current = queue;
-  idxRef.current = idx;
-  spotifyRef.current = spotify;
-  playingRef.current = playing;
-  trackRef.current = queue[idx] ?? queue[0];
-  favRef.current = fav;
+  localRepeatRef.current  = localRepeat
+  localShuffleRef.current = localShuffle
+  localQueueRef.current   = localQueue
+  localIdxRef.current     = localIdx
+  spotifyRef.current      = spotify
+  localPlayingRef.current = localPlaying
+  favRef.current          = fav
 
-  const track = queue[idx] ?? queue[0];
+  // ── SDK state derivation ──────────────────────────────────────────────────
+  const s = spotify?.sdkState
+  const inSdk = spotify != null
+  const sdkLive = inSdk && s != null
 
-  const engine: "sdk" | "audio" | "raf" =
-    spotify != null && Boolean(track?.spotifyUri)
-      ? "sdk"
-      : Boolean(track?.previewUrl)
-        ? "audio"
-        : "raf";
+  const sdkCurrent = sdkLive ? s!.track_window.current_track : null
 
-  // ── advanceQueue ──────────────────────────────────────────────────────────
-  const advanceQueue = useCallback(() => {
-    setIdx((i) => (i + 1) % queueRef.current.length);
-    setTime(0);
-  }, []);
+  const track: Track = sdkCurrent
+    ? {
+        title:      sdkCurrent.name,
+        dur:        s!.duration / 1000,
+        artist:     sdkCurrent.artists[0]?.name ?? '',
+        album:      sdkCurrent.album.name,
+        color:      '#555',
+        imageUrl:   sdkCurrent.album.images[0]?.url,
+        spotifyUri: sdkCurrent.uri,
+      }
+    : (localQueue[localIdx] ?? NULL_TRACK)
 
-  // ── Media Session: register handlers once ────────────────────────────────
+  const playing = sdkLive ? !s!.paused : localPlaying
+  const time    = sdkLive ? s!.position / 1000 : localTime
+  const shuffle = sdkLive ? s!.shuffle : localShuffle
+  const repeat  = sdkLive ? (s!.repeat_mode as 0 | 1 | 2) : localRepeat
+
+  const upNext: UpNextTrack[] = sdkLive
+    ? (s!.track_window.next_tracks ?? []).map(t => ({
+        title:    t.name,
+        artist:   t.artists[0]?.name ?? '',
+        imageUrl: t.album.images[0]?.url,
+      }))
+    : Array.from({ length: Math.min(5, localQueue.length - 1) }, (_, i) => {
+        const t = localQueue[(localIdx + i + 1) % localQueue.length]
+        return { title: t.title, artist: t.artist, imageUrl: t.imageUrl }
+      })
+
+  const disallows   = sdkLive ? s!.disallows : null
+  const prevDisabled = Boolean(disallows?.skipping_prev)
+  const nextDisabled = Boolean(disallows?.skipping_next)
+
+  const localEngine: 'audio' | 'raf' =
+    Boolean(localQueue[localIdx]?.previewUrl) ? 'audio' : 'raf'
+
+  // ── Startup: mirror active Spotify Connect playback without transfer ──────
   useEffect(() => {
-    if (!("mediaSession" in navigator)) return;
-    navigator.mediaSession.setActionHandler("play", () => setPlaying(true));
-    navigator.mediaSession.setActionHandler("pause", () => setPlaying(false));
-    navigator.mediaSession.setActionHandler("nexttrack", () =>
-      nextCbRef.current(),
-    );
-    navigator.mediaSession.setActionHandler("previoustrack", () =>
-      prevCbRef.current(),
-    );
-    navigator.mediaSession.setActionHandler("seekto", (e) => {
-      if (e.seekTime != null)
-        seekCbRef.current(e.seekTime / (trackRef.current?.dur || 1));
-    });
-  }, []);
+    if (!spotify || startupSyncRef.current) return
+    startupSyncRef.current = true
+    let live = true
 
-  // ── Media Session: metadata (updates on track change) ─────────────────────
+    Promise.all([
+      fetchCurrentPlayback(),
+      fetchUserQueue().catch(() => ({ currentTrack: null, queue: [] as Track[] })),
+    ])
+      .then(([current, userQueue]) => {
+        if (!live || spotifyRef.current?.sdkState || !current?.track) return
+        setLocalQueue([
+          current.track,
+          ...userQueue.queue.filter(t => t.spotifyUri !== current.track?.spotifyUri),
+        ])
+        setLocalIdx(0)
+        setLocalTime(current.progressMs / 1000)
+        setLocalPlaying(current.isPlaying)
+        setLocalShuffle(current.shuffle)
+        setLocalRepeat(current.repeat)
+        setStarted(current.isPlaying)
+      })
+      .catch(() => {})
+
+    return () => { live = false }
+  }, [spotify])
+
+  // ── Media Session: register once ─────────────────────────────────────────
   useEffect(() => {
-    if (!("mediaSession" in navigator) || !track) return;
+    if (!('mediaSession' in navigator)) return
+    navigator.mediaSession.setActionHandler('play',  () => inSdk ? void startPlaybackApi() : setLocalPlaying(true))
+    navigator.mediaSession.setActionHandler('pause', () => inSdk ? void pausePlayback()    : setLocalPlaying(false))
+    navigator.mediaSession.setActionHandler('nexttrack',     () => nextCbRef.current())
+    navigator.mediaSession.setActionHandler('previoustrack', () => prevCbRef.current())
+    navigator.mediaSession.setActionHandler('seekto', e => {
+      if (e.seekTime != null) seekCbRef.current(e.seekTime / (track.dur || 1))
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── Media Session: metadata ───────────────────────────────────────────────
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !track.title) return
     const artwork: MediaImage[] = track.imageUrl
-      ? [
-          { src: track.imageUrl, sizes: "640x640", type: "image/jpeg" },
-          { src: track.imageUrl, sizes: "300x300", type: "image/jpeg" },
-        ]
-      : [];
+      ? [{ src: track.imageUrl, sizes: '640x640', type: 'image/jpeg' }]
+      : []
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: track.title,
-      artist: track.artist,
-      album: track.album,
-      artwork,
-    });
-  }, [track?.title, track?.artist, track?.album, track?.imageUrl]);
+      title: track.title, artist: track.artist, album: track.album, artwork,
+    })
+  }, [track.title, track.artist, track.album, track.imageUrl])
 
-  // ── Media Session: position state ─────────────────────────────────────────
+  // ── Media Session: position state ────────────────────────────────────────
   useEffect(() => {
-    if (!("mediaSession" in navigator) || !track?.dur) return;
+    if (!('mediaSession' in navigator) || !track.dur) return
     try {
       navigator.mediaSession.setPositionState({
-        duration: track.dur,
-        playbackRate: 1,
+        duration: track.dur, playbackRate: 1,
         position: Math.min(Math.max(0, time), track.dur),
-      });
-    } catch {
-      /* old Safari */
-    }
-  }, [time, track?.dur]);
+      })
+    } catch { /* old Safari */ }
+  }, [time, track.dur])
 
-  // ── Prefetch next tracks ──────────────────────────────────────────────────
+  // ── SDK: check liked state when current track changes ─────────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const nextTracks = Array.from(
-      { length: Math.min(5, queue.length - 1) },
-      (_, i) => queue[(idx + i + 1) % queue.length],
-    );
-    const audios: HTMLAudioElement[] = [];
+    if (!sdkLive) return
+    const id = sdkCurrent?.uri?.split(':')[2]
+    if (!id) return
+    checkSavedTracks([id]).then(([liked]) => setFav(!!liked)).catch(() => {})
+  }, [sdkCurrent?.id])
 
-    nextTracks.forEach((t) => {
-      if (t.imageUrl) {
-        const img = new Image();
-        img.src = t.imageUrl;
-      }
-      if (t.previewUrl) {
-        const audio = new Audio();
-        audio.preload = "metadata";
-        audio.src = t.previewUrl;
-        audio.load();
-        audios.push(audio);
-      }
-    });
-
-    return () => {
-      audios.forEach((audio) => {
-        audio.removeAttribute("src");
-        audio.load();
-      });
-    };
-  }, [idx, queue]);
-
-  // ── Persistent audio element — attach listeners once ──────────────────────
+  // ── Local audio: attach listeners once ────────────────────────────────────
   useEffect(() => {
-    const audio = audioRef.current;
-
-    const onTimeUpdate = () => setTime(audio.currentTime);
+    const audio = audioRef.current
+    const onTimeUpdate = () => setLocalTime(audio.currentTime)
     const onEnded = () => {
-      if (repeatRef.current === 2) {
-        audio.currentTime = 0;
-        void audio.play();
-        return;
-      }
-      advanceQueue();
-    };
-
-    audio.addEventListener("timeupdate", onTimeUpdate);
-    audio.addEventListener("ended", onEnded);
-
+      if (localRepeatRef.current === 2) { audio.currentTime = 0; void audio.play(); return }
+      setLocalIdx(i => (i + 1) % localQueueRef.current.length)
+      setLocalTime(0)
+    }
+    audio.addEventListener('timeupdate', onTimeUpdate)
+    audio.addEventListener('ended', onEnded)
     return () => {
-      audio.pause();
-      audio.removeEventListener("timeupdate", onTimeUpdate);
-      audio.removeEventListener("ended", onEnded);
-      audio.src = "";
-    };
-  }, [advanceQueue]);
-
-  // ── Audio: update src on track change ─────────────────────────────────────
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (engine !== "audio") {
-      audio.pause();
-      return;
+      audio.pause()
+      audio.removeEventListener('timeupdate', onTimeUpdate)
+      audio.removeEventListener('ended', onEnded)
+      audio.src = ''
     }
+  }, [])
 
-    if (gestureDidPlayRef.current) {
-      gestureDidPlayRef.current = false;
-      return;
-    }
-
-    const newSrc = track?.previewUrl ?? "";
-    audio.src = newSrc;
-    if (newSrc) {
-      audio.load();
-      if (playingRef.current) void audio.play();
-    }
-  }, [track?.previewUrl, engine, idx]);
-
-  // ── Audio: sync play/pause state ──────────────────────────────────────────
+  // ── Local audio: update src on track change ───────────────────────────────
   useEffect(() => {
-    const audio = audioRef.current;
-    if (engine !== "audio") return;
-    if (playing && audio.paused && audio.src) void audio.play();
-    if (!playing && !audio.paused) audio.pause();
-  }, [playing, engine]);
+    const audio = audioRef.current
+    if (inSdk || localEngine !== 'audio') { audio.pause(); return }
+    if (gestureDidPlayRef.current) { gestureDidPlayRef.current = false; return }
+    const src = localQueue[localIdx]?.previewUrl ?? ''
+    audio.src = src
+    if (src) { audio.load(); if (localPlayingRef.current) void audio.play() }
+  }, [localQueue[localIdx]?.previewUrl, localEngine, localIdx, inSdk])
 
-  // ── SDK state sync ────────────────────────────────────────────────────────
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // ── Local audio: play/pause sync ─────────────────────────────────────────
   useEffect(() => {
-    if (engine !== "sdk" || !spotify?.sdkState) return;
-    const s = spotify.sdkState;
-    setTime(s.position / 1000);
-    setPlaying(!s.paused);
-    setShuffle(s.shuffle);
-    setRepeat(s.repeat_mode as 0 | 1 | 2);
+    const audio = audioRef.current
+    if (inSdk || localEngine !== 'audio') return
+    if (localPlaying && audio.paused && audio.src) void audio.play()
+    if (!localPlaying && !audio.paused) audio.pause()
+  }, [localPlaying, localEngine, inSdk])
 
-    if ("mediaSession" in navigator) {
-      const ct = s.track_window.current_track;
-      const artwork: MediaImage[] = ct.album.images?.length
-        ? ct.album.images.map((img) => ({
-            src: img.url,
-            sizes: "640x640",
-            type: "image/jpeg" as const,
-          }))
-        : [];
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: ct.name,
-        artist: ct.artists.map((a) => a.name).join(", "),
-        album: ct.album.name,
-        artwork,
-      });
-      try {
-        navigator.mediaSession.setPositionState({
-          duration: s.duration / 1000,
-          playbackRate: 1,
-          position: Math.min(s.position / 1000, s.duration / 1000),
-        });
-      } catch {
-        /* old Safari */
-      }
+  // ── Local RAF simulation ──────────────────────────────────────────────────
+  useEffect(() => {
+    const dur = localQueue[localIdx]?.dur ?? 0
+    if (inSdk || localEngine !== 'raf' || !localPlaying || dur <= 0) {
+      cancelAnimationFrame(rafRef.current); lastRef.current = 0; return
     }
-
-    const uri = s.track_window.current_track.uri;
-    const newIdx = queueRef.current.findIndex((t) => t.spotifyUri === uri);
-    if (newIdx !== -1 && newIdx !== idx) setIdx(newIdx);
-  }, [spotify?.sdkState]);
-
-  // ── SDK: check liked state when track changes ─────────────────────────────
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (engine !== "sdk" || !spotify?.sdkState) return;
-    const uri = spotify.sdkState.track_window.current_track.uri;
-    const id = uri?.split(":")[2];
-    if (!id) return;
-    checkSavedTracks([id])
-      .then(([liked]) => setFav(!!liked))
-      .catch(() => {});
-  }, [spotify?.sdkState?.track_window.current_track.id, engine]);
-
-  // ── SDK: fetch server queue when track changes ─────────────────────────────
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (engine !== "sdk") {
-      setServerUpNext([]);
-      return;
-    }
-    fetchUserQueue()
-      .then(({ queue }) =>
-        setServerUpNext(
-          queue
-            .slice(0, 2)
-            .map((t) => ({
-              title: t.title,
-              artist: t.artist,
-              imageUrl: t.imageUrl,
-            })),
-        ),
-      )
-      .catch(() => {});
-  }, [spotify?.sdkState?.track_window.current_track.id, engine]);
-
-  // ── RAF simulation ────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (engine !== "raf" || !playing || !track) {
-      cancelAnimationFrame(rafRef.current);
-      lastRef.current = 0;
-      return;
-    }
-
     const step = (ts: number) => {
       if (lastRef.current) {
-        setTime((tm) => {
-          const nt = tm + (ts - lastRef.current) / 1000;
-          if (nt >= (track?.dur ?? 0)) {
-            if (repeatRef.current === 2) return 0;
-            advanceQueue();
-            return 0;
+        setLocalTime(tm => {
+          const nt = tm + (ts - lastRef.current) / 1000
+          if (nt >= dur) {
+            if (localRepeatRef.current === 2) return 0
+            setLocalIdx(i => (i + 1) % localQueueRef.current.length)
+            return 0
           }
-          return nt;
-        });
+          return nt
+        })
       }
-      lastRef.current = ts;
-      rafRef.current = requestAnimationFrame(step);
-    };
-    rafRef.current = requestAnimationFrame(step);
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-      lastRef.current = 0;
-    };
-  }, [playing, engine, idx, track?.dur, advanceQueue]);
+      lastRef.current = ts
+      rafRef.current = requestAnimationFrame(step)
+    }
+    rafRef.current = requestAnimationFrame(step)
+    return () => { cancelAnimationFrame(rafRef.current); lastRef.current = 0 }
+  }, [localPlaying, localEngine, localIdx, localQueue, inSdk])
+
+  // ── Local: prefetch next tracks ───────────────────────────────────────────
+  useEffect(() => {
+    if (inSdk) return
+    const nexts = Array.from({ length: Math.min(5, localQueue.length - 1) },
+      (_, i) => localQueue[(localIdx + i + 1) % localQueue.length])
+    const audios: HTMLAudioElement[] = []
+    nexts.forEach(t => {
+      if (t?.imageUrl) { const img = new Image(); img.src = t.imageUrl }
+      if (t?.previewUrl) {
+        const a = new Audio(); a.preload = 'metadata'; a.src = t.previewUrl; a.load(); audios.push(a)
+      }
+    })
+    return () => audios.forEach(a => { a.removeAttribute('src'); a.load() })
+  }, [localIdx, localQueue, inSdk])
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
 
-  const play = useCallback(
-    (q: Track[], i: number, contextUri?: string) => {
-      if (q.length === 0) return;
-      const t = q[i];
+  const play = useCallback((q: Track[], i: number, contextUri?: string) => {
+    if (!q.length && !contextUri) return
+    setStarted(true)
 
-      // context_uri: Spotify manages order and shuffle server-side — skip local pre-shuffle.
-      let activeQueue = q;
-      let activeIdx = i;
-      if (shuffleRef.current && !contextUri) {
-        const rest = q.filter((_, ri) => ri !== i);
-        for (let j = rest.length - 1; j > 0; j--) {
-          const k = Math.floor(Math.random() * (j + 1));
-          [rest[j], rest[k]] = [rest[k], rest[j]];
-        }
-        originalQueueRef.current = q;
-        activeQueue = [t, ...rest];
-        activeIdx = 0;
+    if (inSdk) {
+      if (contextUri) {
+        void spotifyRef.current!.startPlaybackContext(contextUri, i)
       } else {
-        originalQueueRef.current = [];
-      }
-
-      setQueue(activeQueue);
-      setIdx(activeIdx);
-      setTime(0);
-      setPlaying(true);
-      setStarted(true);
-
-      if (spotifyRef.current && t?.spotifyUri) {
-        if (contextUri) {
-          void spotifyRef.current.startPlaybackContext(contextUri, i);
-        } else {
-          const allUris = activeQueue.flatMap((t) =>
-            t.spotifyUri ? [t.spotifyUri] : [],
-          );
-          const offsetInAll = activeQueue
-            .slice(0, activeIdx)
-            .filter((t) => t.spotifyUri).length;
-          const MAX = 300;
-          const windowUris = [
-            ...allUris.slice(offsetInAll),
-            ...allUris.slice(0, offsetInAll),
-          ].slice(0, MAX);
-          void spotifyRef.current.startPlayback(windowUris, 0);
+        const uris = q.flatMap(t => t.spotifyUri ? [t.spotifyUri] : [])
+        if (uris.length) {
+          const offset = q.slice(0, i).filter(t => t.spotifyUri).length
+          const MAX = 300
+          const window = [...uris.slice(offset), ...uris.slice(0, offset)].slice(0, MAX)
+          void spotifyRef.current!.startPlayback(window, 0)
         }
-      } else if (t?.previewUrl) {
-        const audio = audioRef.current;
-        audio.src = t.previewUrl;
-        audio.load();
-        gestureDidPlayRef.current = true;
-        void audio.play();
       }
-    },
-    [spotify],
-  );
+      // Keep local queue for reference (display/fallback)
+      setLocalQueue(q)
+      setLocalIdx(i)
+      return
+    }
+
+    // Local mode: pre-shuffle if needed
+    let aq = q, ai = i
+    if (localShuffleRef.current) {
+      const rest = q.filter((_, ri) => ri !== i)
+      for (let j = rest.length - 1; j > 0; j--) {
+        const k = Math.floor(Math.random() * (j + 1))
+        ;[rest[j], rest[k]] = [rest[k], rest[j]]
+      }
+      origQueueRef.current = q
+      aq = [q[i], ...rest]; ai = 0
+    } else {
+      origQueueRef.current = []
+    }
+
+    setLocalQueue(aq); setLocalIdx(ai); setLocalTime(0)
+    setLocalPlaying(true)
+
+    const t = aq[ai]
+    if (t?.previewUrl) {
+      const audio = audioRef.current
+      audio.src = t.previewUrl; audio.load()
+      gestureDidPlayRef.current = true
+      void audio.play()
+    }
+  }, [inSdk])
 
   const toggle = useCallback(() => {
-    if (engine === "sdk" && spotify?.player) {
-      void spotify.player.togglePlay();
-      return;
+    if (inSdk && spotifyRef.current?.player) {
+      // Use SDK togglePlay — acts on local device directly, no active-device requirement
+      void spotifyRef.current.player.togglePlay()
+      return
     }
-    if (engine === "audio") {
-      if (playingRef.current) audioRef.current.pause();
-      else void audioRef.current.play();
+    if (localEngine === 'audio') {
+      localPlayingRef.current ? audioRef.current.pause() : void audioRef.current.play()
     }
-    setPlaying((p) => !p);
-  }, [engine, spotify]);
+    setLocalPlaying(p => !p)
+  }, [inSdk, s, localEngine])
 
   const next = useCallback(() => {
-    if (engine === "sdk" && spotify?.player) {
-      void spotify.player.nextTrack();
-      return;
-    }
-    advanceQueue();
-  }, [engine, spotify, advanceQueue]);
+    if (inSdk) { void skipToNext(); return }
+    setLocalIdx(i => (i + 1) % localQueueRef.current.length); setLocalTime(0)
+  }, [inSdk])
 
   const prev = useCallback(() => {
-    if (engine === "sdk" && spotify?.player) {
-      void spotify.player.previousTrack();
-      return;
-    }
-    if (time > 3) {
-      setTime(0);
-      audioRef.current.currentTime = 0;
-      return;
-    }
-    setIdx((i) => (i - 1 + queueRef.current.length) % queueRef.current.length);
-    setTime(0);
-  }, [engine, spotify, time]);
+    if (inSdk) { void skipToPrevious(); return }
+    if (localTime > 3) { setLocalTime(0); audioRef.current.currentTime = 0; return }
+    setLocalIdx(i => (i - 1 + localQueueRef.current.length) % localQueueRef.current.length)
+    setLocalTime(0)
+  }, [inSdk, localTime])
 
-  const seek = useCallback(
-    (fraction: number) => {
-      if (engine === "sdk" && spotify?.player) {
-        const dur = spotify.sdkState?.duration ?? (track?.dur ?? 0) * 1000;
-        void spotify.player.seek(Math.round(fraction * dur));
-        return;
-      }
-      const t = fraction * (track?.dur ?? 0);
-      setTime(t);
-      audioRef.current.currentTime = t;
-    },
-    [engine, spotify, track?.dur],
-  );
+  const seek = useCallback((fraction: number) => {
+    if (inSdk) {
+      // REST API — same as thirdparty's SongProgressBar
+      const dur = s?.duration ?? 0
+      void seekToPosition(Math.round(fraction * dur))
+      return
+    }
+    const t = fraction * (localQueue[localIdx]?.dur ?? 0)
+    setLocalTime(t); audioRef.current.currentTime = t
+  }, [inSdk, s, localQueue, localIdx])
 
   const toggleFav = useCallback(() => {
-    const t = trackRef.current;
-    if (t?.spotifyUri) {
-      const id = t.spotifyUri.split(":")[2];
-      if (!id) {
-        setFav((v) => !v);
-        return;
-      }
-      const newFav = !favRef.current;
-      setFav(newFav);
-      const op = newFav ? saveTracks([id]) : removeTracks([id]);
-      op.catch(() => setFav(!newFav));
-      return;
+    const uri = sdkLive ? s!.track_window.current_track.uri : localQueue[localIdxRef.current]?.spotifyUri
+    if (uri) {
+      const id = uri.split(':')[2]
+      if (!id) { setFav(v => !v); return }
+      const newFav = !favRef.current
+      setFav(newFav)
+      ;(newFav ? saveTracks([id]) : removeTracks([id])).catch(() => setFav(!newFav))
+      return
     }
-    setFav((v) => !v);
-  }, []);
+    setFav(v => !v)
+  }, [sdkLive, s])
 
   const toggleShuffle = useCallback(() => {
-    if (spotifyRef.current && trackRef.current?.spotifyUri) {
-      // SDK mode: Spotify handles shuffle server-side
-      void spotifyRef.current.setShuffle(!shuffleRef.current);
-      return;
+    if (inSdk) {
+      void setShuffleState(!s?.shuffle)
+      return
     }
-    // Non-SDK: local queue shuffle
-    setShuffle((prev) => {
-      const next = !prev;
+    setLocalShuffle(prev => {
+      const next = !prev
       if (next) {
-        originalQueueRef.current = queueRef.current;
-        const cur = queueRef.current[idxRef.current];
-        const rest = queueRef.current.filter((_, i) => i !== idxRef.current);
+        origQueueRef.current = localQueueRef.current
+        const cur = localQueueRef.current[localIdxRef.current]
+        const rest = localQueueRef.current.filter((_, i) => i !== localIdxRef.current)
         for (let i = rest.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [rest[i], rest[j]] = [rest[j], rest[i]];
+          const j = Math.floor(Math.random() * (i + 1))
+          ;[rest[i], rest[j]] = [rest[j], rest[i]]
         }
-        setQueue([cur, ...rest]);
-        setIdx(0);
+        setLocalQueue([cur, ...rest]); setLocalIdx(0)
       } else {
-        const orig = originalQueueRef.current;
+        const orig = origQueueRef.current
         if (orig.length > 0) {
-          const cur = queueRef.current[idxRef.current];
-          const newIdx = orig.indexOf(cur);
-          setQueue(orig);
-          setIdx(newIdx >= 0 ? newIdx : 0);
-          originalQueueRef.current = [];
+          const cur = localQueueRef.current[localIdxRef.current]
+          const ni = orig.indexOf(cur)
+          setLocalQueue(orig); setLocalIdx(ni >= 0 ? ni : 0)
+          origQueueRef.current = []
         }
       }
-      return next;
-    });
-  }, []);
+      return next
+    })
+  }, [inSdk, s])
 
   const cycleRepeat = useCallback(() => {
-    if (spotifyRef.current && trackRef.current?.spotifyUri) {
-      const next = ((repeatRef.current + 1) % 3) as 0 | 1 | 2;
-      const modes = ["off", "context", "track"] as const;
-      void setRepeatModeApi(modes[next]);
-      return;
+    if (inSdk) {
+      const cur = s?.repeat_mode ?? 0
+      const modes = ['off', 'context', 'track'] as const
+      void setRepeatModeApi(modes[((cur + 1) % 3) as 0 | 1 | 2])
+      return
     }
-    setRepeat((r) => ((r + 1) % 3) as 0 | 1 | 2);
-  }, []);
+    setLocalRepeat(r => ((r + 1) % 3) as 0 | 1 | 2)
+  }, [inSdk, s])
 
-  const setVolume = useCallback((fraction: number) => {
-    const clamped = Math.max(0, Math.min(1, fraction));
-    setVolumeState(clamped);
-    if (spotifyRef.current) {
-      void spotifyRef.current.player.setVolume(clamped);
-    }
-  }, []);
-
-  // Keep Media Session handler refs pointing to the latest callbacks.
-  nextCbRef.current = next;
-  prevCbRef.current = prev;
-  seekCbRef.current = seek;
-
-  // Up Next: server queue (accurate after server-side shuffle/radio) > local
-  const upNext: UpNextTrack[] =
-    serverUpNext.length > 0 && engine === "sdk"
-      ? serverUpNext
-      : Array.from({ length: Math.min(2, queue.length - 1) }, (_, i) => {
-          const t = queue[(idx + i + 1) % queue.length];
-          return { title: t.title, artist: t.artist, imageUrl: t.imageUrl };
-        });
-
-  const disallows = engine === "sdk" ? spotify?.sdkState?.disallows : null;
-  const prevDisabled = Boolean(disallows?.skipping_prev);
-  const nextDisabled = Boolean(disallows?.skipping_next);
+  nextCbRef.current = next
+  prevCbRef.current = prev
+  seekCbRef.current = seek
 
   return {
-    queue,
-    idx,
-    track,
-    upNext,
-    playing,
-    time,
-    fav,
-    shuffle,
-    repeat,
-    started,
-    volume,
-    prevDisabled,
-    nextDisabled,
-    play,
-    toggle,
-    next,
-    prev,
-    seek,
-    toggleFav,
-    toggleShuffle,
-    cycleRepeat,
-    setVolume,
-  };
+    track, upNext, playing, time, fav, shuffle, repeat, started,
+    prevDisabled, nextDisabled,
+    queue: localQueue, idx: localIdx,
+    play, toggle, next, prev, seek,
+    toggleFav, toggleShuffle, cycleRepeat,
+  }
 }

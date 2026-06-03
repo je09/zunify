@@ -74,6 +74,16 @@ export function useSpotifyPlayer(
       player.addListener('ready', ({ device_id }) => {
         if (!live) return
 
+        // Transfer playback to this device on ready — same as thirdparty webPlayback.tsx
+        void getValidToken().then(token => {
+          if (!token || !live) return
+          fetch('https://api.spotify.com/v1/me/player', {
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_ids: [device_id] }),
+          }).catch(() => {})
+        })
+
         const putPlay = async (token: string, body: string): Promise<void> => {
           const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
           const res = await fetch(

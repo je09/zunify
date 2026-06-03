@@ -294,6 +294,27 @@ export async function fetchPlaybackState(): Promise<SpPlaybackState | null> {
   return res.json() as Promise<SpPlaybackState>
 }
 
+export async function fetchCurrentPlayback(): Promise<{
+  track: Track | null
+  isPlaying: boolean
+  progressMs: number
+  shuffle: boolean
+  repeat: 0 | 1 | 2
+  volume: number | null
+} | null> {
+  const state = await fetchPlaybackState()
+  if (!state) return null
+  const repeat = state.repeat_state === 'track' ? 2 : state.repeat_state === 'context' ? 1 : 0
+  return {
+    track: mapTrack(state.item),
+    isPlaying: state.is_playing,
+    progressMs: state.progress_ms,
+    shuffle: state.shuffle_state,
+    repeat,
+    volume: state.device.volume_percent == null ? null : state.device.volume_percent / 100,
+  }
+}
+
 export async function transferPlayback(deviceId: string, play = false): Promise<void> {
   return spMutate('PUT', '/me/player', { device_ids: [deviceId], play })
 }

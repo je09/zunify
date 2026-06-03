@@ -22,7 +22,7 @@ export function Player({ pb, onBack }: Props) {
   const swipe = useSwipe(onBack, () => {})
 
   return (
-    <div className="np" {...swipe}>
+    <div className="np" ref={swipe}>
 
       {/* scrollable body — pushes transport to bottom */}
       <div className="np-body">

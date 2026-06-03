@@ -124,7 +124,18 @@ export function getAccessToken(): string | null {
   return t && Date.now() < t.expiresAt ? t.access : null
 }
 
+// Singleton so concurrent callers share one in-flight refresh request.
+// Spotify invalidates the old refresh_token when you use it — a second
+// concurrent request with the same token will fail with invalid_grant.
+let _refreshPromise: Promise<string | null> | null = null
+
 export async function refreshAccessToken(): Promise<string | null> {
+  if (_refreshPromise) return _refreshPromise
+  _refreshPromise = _doRefresh().finally(() => { _refreshPromise = null })
+  return _refreshPromise
+}
+
+async function _doRefresh(): Promise<string | null> {
   const t = load()
   if (!t) return null
   const res = await fetch('https://accounts.spotify.com/api/token', {
@@ -137,7 +148,8 @@ export async function refreshAccessToken(): Promise<string | null> {
     }),
   })
   if (!res.ok) { clearTokens(); return null }
-  const d = await res.json() as { access_token: string; refresh_token?: string; expires_in: number }
+  const d = await res.json() as { access_token?: string; refresh_token?: string; expires_in?: number }
+  if (!d.access_token || !d.expires_in) { clearTokens(); return null }
   persist(d.access_token, d.refresh_token ?? t.refresh, d.expires_in)
   return d.access_token
 }

@@ -17,7 +17,7 @@ export function GenreDetail({ genre, onOpenArtist, onPlay, onBack }: Props) {
 
   return (
     <div className="page">
-      <div className="scroll" {...swipe}>
+      <div className="scroll" ref={swipe}>
         <div className="llist">
           <div className="screen-heading">{genre}</div>
           <Section>artists</Section>

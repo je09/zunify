@@ -17,7 +17,7 @@ export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
 
   return (
     <div className="page">
-      <div className="scroll" {...swipe}>
+      <div className="scroll" ref={swipe}>
         <div style={{ padding: '10px 26px 0' }}>
           <div className="screen-heading">{current.name}</div>
           <button className="al-playall" style={{ marginBottom: 8 }} onClick={() => onPlay(queue, 0)}>

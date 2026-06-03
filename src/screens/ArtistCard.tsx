@@ -28,7 +28,7 @@ export function ArtistCard({ name, tab, onTabChange, onOpenAlbum, onPlay, onBack
       <div className="card-body">
         <div className="artist-heading">{name}</div>
         <Pivot tabs={['albums', 'songs']} active={tab} onChange={onTabChange} />
-        <PivotArea tab={tab} {...swipe}>
+        <PivotArea tab={tab} ref={swipe}>
           {/* albums */}
           <div style={{ padding: '0 26px' }}>
             <Section>in collection</Section>

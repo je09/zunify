@@ -18,7 +18,7 @@ export function AlbumDetail({ album, tab, onTabChange, onPlay, onBack }: Props) 
   return (
     <div className="page">
       <Pivot tabs={['songs', 'review']} active={tab} onChange={onTabChange} />
-      <PivotArea tab={tab} {...swipe}>
+      <PivotArea tab={tab} ref={swipe}>
         {/* songs */}
         <div>
           <div className="al-head">

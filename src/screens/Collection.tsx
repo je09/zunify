@@ -54,7 +54,7 @@ export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpen
   return (
     <div className="page">
       <Pivot tabs={TABS} active={tab} onChange={onTabChange} />
-      <PivotArea tab={tab} {...swipe}>
+      <PivotArea tab={tab} ref={swipe}>
         <ArtistsTab artists={artists} albums={albums} hasMore={hasMore(albums.length, totals.albums)} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onPlay={onPlay} />
         <AlbumsTab albums={albums} total={totals.albums} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
         <SongsTab songs={songs} likedTrackUris={likedTrackUris} hasMore={hasMore(likedTrackCount, totals.songs)} loadingMore={loadingMore.tracks} onLoadMore={() => loadMore('tracks')} onPlay={onPlay} />

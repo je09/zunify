@@ -1,15 +1,16 @@
-import { useRef, useLayoutEffect, useState, useCallback, Children, ReactNode } from 'react'
+import { useRef, useLayoutEffect, useState, useCallback, Children, ReactNode, forwardRef } from 'react'
 import { Icons } from './icons'
 
 // ── PivotArea — sliding tab transition (both tabs visible during animation) ───
 // Renders the exiting tab and the entering tab simultaneously with CSS slide
 // animations, giving the Metro "peek" effect where both contents are visible.
+// forwardRef so callers can attach a swipe gesture ref directly to the div.
 
-export function PivotArea({
+export const PivotArea = forwardRef<HTMLDivElement, { tab: number; children: ReactNode[] } & React.HTMLAttributes<HTMLDivElement>>(function PivotArea({
   tab,
   children,
   ...rest
-}: { tab: number; children: ReactNode[] } & React.HTMLAttributes<HTMLDivElement>) {
+}, outerRef) {
   const prevRef = useRef(tab)
   const [exiting, setExiting] = useState<{ tab: number; dir: 'fwd' | 'back' } | null>(null)
 
@@ -23,7 +24,7 @@ export function PivotArea({
   const arr = Children.toArray(children)
 
   return (
-    <div className="pivot-area" {...rest}>
+    <div className="pivot-area" ref={outerRef} {...rest}>
       {exiting && (
         <div
           key={`exit-${exiting.tab}`}
@@ -41,7 +42,7 @@ export function PivotArea({
       </div>
     </div>
   )
-}
+})
 
 // ── Bottom back bar — shared across all sub-screens ──────────────────────────
 export function BottomBack({ onBack }: { onBack: () => void }) {
@@ -90,30 +91,79 @@ export function Pivot({ tabs, active, onChange }: PivotProps) {
 }
 
 // ── Swipe detection ──────────────────────────────────────────────────────────
-// Pointer events work for both mouse and touch.
-interface SwipeStart { x: number; y: number }
+// Uses native touch listeners (not React synthetic events) so we can attach
+// touchmove as { passive: false } and call preventDefault() to claim the
+// gesture before iOS fires pointercancel and drops it.
+// Mouse is handled separately so desktop dev still works.
 
 export function useSwipe(onPrev: () => void, onNext: () => void) {
-  const start = useRef<SwipeStart | null>(null)
+  const onPrevRef = useRef(onPrev); onPrevRef.current = onPrev
+  const onNextRef = useRef(onNext); onNextRef.current = onNext
+  const cleanupRef = useRef<(() => void) | null>(null)
 
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
-    start.current = { x: e.clientX, y: e.clientY }
+  const ref = useCallback((el: HTMLElement | null) => {
+    // Always run the previous cleanup first (handles unmount and re-mount).
+    cleanupRef.current?.()
+    cleanupRef.current = null
+    if (!el) return
+
+    const start = { touch: null as { x: number; y: number } | null,
+                    mouse: null as { x: number; y: number } | null }
+
+    // ── Touch (iOS PWA) ──────────────────────────────────────────────────────
+    const onTouchStart = (e: TouchEvent) => {
+      start.touch = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      if (!start.touch) return
+      const dx = Math.abs(e.touches[0].clientX - start.touch.x)
+      const dy = Math.abs(e.touches[0].clientY - start.touch.y)
+      // Claim the gesture when motion is primarily horizontal so iOS doesn't
+      // fire pointercancel and hand the touch to the system gesture handler.
+      if (dx > dy && dx > 8) e.preventDefault()
+    }
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!start.touch) return
+      const t = e.changedTouches[0]
+      const dx = t.clientX - start.touch.x
+      const dy = t.clientY - start.touch.y
+      start.touch = null
+      if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+        dx < 0 ? onNextRef.current() : onPrevRef.current()
+      }
+    }
+    const onTouchCancel = () => { start.touch = null }
+
+    // ── Mouse (desktop) ──────────────────────────────────────────────────────
+    const onMouseDown = (e: MouseEvent) => { start.mouse = { x: e.clientX, y: e.clientY } }
+    const onMouseUp   = (e: MouseEvent) => {
+      if (!start.mouse) return
+      const dx = e.clientX - start.mouse.x
+      const dy = e.clientY - start.mouse.y
+      start.mouse = null
+      if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+        dx < 0 ? onNextRef.current() : onPrevRef.current()
+      }
+    }
+
+    el.addEventListener('touchstart',  onTouchStart,  { passive: true })
+    el.addEventListener('touchmove',   onTouchMove,   { passive: false }) // must be non-passive
+    el.addEventListener('touchend',    onTouchEnd,    { passive: true })
+    el.addEventListener('touchcancel', onTouchCancel, { passive: true })
+    el.addEventListener('mousedown',   onMouseDown)
+    el.addEventListener('mouseup',     onMouseUp)
+
+    cleanupRef.current = () => {
+      el.removeEventListener('touchstart',  onTouchStart)
+      el.removeEventListener('touchmove',   onTouchMove)
+      el.removeEventListener('touchend',    onTouchEnd)
+      el.removeEventListener('touchcancel', onTouchCancel)
+      el.removeEventListener('mousedown',   onMouseDown)
+      el.removeEventListener('mouseup',     onMouseUp)
+    }
   }, [])
 
-  const onPointerUp = useCallback((e: React.PointerEvent) => {
-    if (!start.current) return
-    const dx = e.clientX - start.current.x
-    const dy = e.clientY - start.current.y
-    start.current = null
-    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.3) {
-      e.stopPropagation() // don't bubble to any parent swipe handler
-      dx < 0 ? onNext() : onPrev()
-    }
-  }, [onNext, onPrev])
-
-  const onPointerCancel = useCallback(() => { start.current = null }, [])
-
-  return { onPointerDown, onPointerUp, onPointerCancel }
+  return ref
 }
 
 // ── Progress bar with drag-to-seek (touch + mouse) ───────────────────────────

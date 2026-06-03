@@ -179,7 +179,10 @@ body {
 /* ── PivotArea — sliding tab container ───────────────────────────────────── */
 .pivot-area {
   flex: 1; position: relative; overflow: hidden;
-  touch-action: pan-y;
+  /* Native touchmove handler calls preventDefault() for horizontal swipes,
+     so we don't need touch-action: pan-y here. pan-y on the pane content
+     handles vertical scroll independently. */
+  touch-action: auto;
 }
 .pivot-pane {
   position: absolute; inset: 0;

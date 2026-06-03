@@ -99,26 +99,51 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     setTime(0)
   }, [])
 
-  // ── Media Session ─────────────────────────────────────────────────────────
+  // ── Media Session: register handlers once ────────────────────────────────
+  // Handlers read latest callbacks through refs so they never go stale and
+  // don't need to be re-registered on each dep change.
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: track.title,
-      artist: track.artist,
-      album: track.album,
-      artwork: track.imageUrl
-        ? [{ src: track.imageUrl, sizes: '600x600', type: 'image/jpeg' }]
-        : [],
-    })
-    navigator.mediaSession.setActionHandler('play', () => setPlaying(true))
+    navigator.mediaSession.setActionHandler('play',  () => setPlaying(true))
     navigator.mediaSession.setActionHandler('pause', () => setPlaying(false))
-    navigator.mediaSession.setActionHandler('nexttrack', () => {
-      setIdx(i => (i + 1) % queueRef.current.length); setTime(0)
+    navigator.mediaSession.setActionHandler('nexttrack',     () => nextCbRef.current())
+    navigator.mediaSession.setActionHandler('previoustrack', () => prevCbRef.current())
+    navigator.mediaSession.setActionHandler('seekto', e => {
+      if (e.seekTime != null) seekCbRef.current(e.seekTime / (trackRef.current?.dur || 1))
     })
-    navigator.mediaSession.setActionHandler('previoustrack', () => {
-      setIdx(i => (i - 1 + queueRef.current.length) % queueRef.current.length); setTime(0)
+  }, [])
+
+  // ── Media Session: metadata (updates on track change) ─────────────────────
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !track) return
+    // Provide two sizes so iOS can pick the best fit for lock screen / CarPlay.
+    const artwork: MediaImage[] = track.imageUrl
+      ? [
+          { src: track.imageUrl, sizes: '640x640', type: 'image/jpeg' },
+          { src: track.imageUrl, sizes: '300x300', type: 'image/jpeg' },
+        ]
+      : []
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title:  track.title,
+      artist: track.artist,
+      album:  track.album,
+      artwork,
     })
-  }, [track.title, track.artist, track.album, track.imageUrl])
+  }, [track?.title, track?.artist, track?.album, track?.imageUrl])
+
+  // ── Media Session: position state (keeps lock-screen scrubber accurate) ───
+  useEffect(() => {
+    if (!('mediaSession' in navigator) || !track?.dur) return
+    try {
+      navigator.mediaSession.setPositionState({
+        duration:     track.dur,
+        playbackRate: 1,
+        position:     Math.min(Math.max(0, time), track.dur),
+      })
+    } catch {
+      // setPositionState is not available in all contexts (e.g. old Safari).
+    }
+  }, [time, track?.dur])
 
   // ── Prefetch next tracks ──────────────────────────────────────────────────
   useEffect(() => {
@@ -210,14 +235,28 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
 
     if ('mediaSession' in navigator) {
       const ct = s.track_window.current_track
+      // SDK overwrites Media Session with "Spotify Embedded Player" — restore
+      // our metadata with all available artwork sizes for best lock-screen quality.
+      const artwork: MediaImage[] = ct.album.images?.length
+        ? ct.album.images.map(img => ({
+            src: img.url,
+            sizes: '640x640',   // Spotify images are square; exact size unknown
+            type: 'image/jpeg' as const,
+          }))
+        : []
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: ct.name,
+        title:  ct.name,
         artist: ct.artists.map(a => a.name).join(', '),
-        album: ct.album.name,
-        artwork: ct.album.images?.[0]
-          ? [{ src: ct.album.images[0].url, sizes: '300x300', type: 'image/jpeg' }]
-          : [],
+        album:  ct.album.name,
+        artwork,
       })
+      try {
+        navigator.mediaSession.setPositionState({
+          duration:     s.duration / 1000,
+          playbackRate: 1,
+          position:     Math.min(s.position / 1000, s.duration / 1000),
+        })
+      } catch { /* old Safari */ }
     }
 
     const uri = s.track_window.current_track.uri
@@ -357,6 +396,11 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
       return next
     })
   }, [idx])
+
+  // Keep Media Session handler refs pointing to the latest callbacks.
+  nextCbRef.current = next
+  prevCbRef.current = prev
+  seekCbRef.current = seek
 
   return {
     queue, idx, track, playing, time, fav, shuffle, repeat, started,

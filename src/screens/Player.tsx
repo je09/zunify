@@ -13,6 +13,9 @@ export function Player({ pb, onBack }: Props) {
   const { track, queue, idx, playing, time, fav, shuffle, repeat,
           toggle, next, prev, seek, toggleFav, toggleShuffle, cycleRepeat } = pb
   const { likedTrackUris } = useLibrary()
+
+  if (!track) return null
+
   const pct = Math.min(100, (time / track.dur) * 100)
   const repeatState = repeat === 0 ? 'outline' : 'on'
   const isLiked = fav || Boolean(track.spotifyUri && likedTrackUris.has(track.spotifyUri))
@@ -53,10 +56,12 @@ export function Player({ pb, onBack }: Props) {
 
         <div className="np-track swap" key={'t' + idx}>
           <div className="title">{track.title}</div>
-          <div className="upnext">
-            <div>{queue[(idx + 1) % queue.length].title}</div>
-            <div>{queue[(idx + 2) % queue.length].title}</div>
-          </div>
+          {queue.length > 1 && (
+            <div className="upnext">
+              <div>{queue[(idx + 1) % queue.length].title}</div>
+              {queue.length > 2 && <div>{queue[(idx + 2) % queue.length].title}</div>}
+            </div>
+          )}
         </div>
       </div>
 

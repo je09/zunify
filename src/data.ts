@@ -385,8 +385,6 @@ export const PLAYLISTS: Playlist[] = [
   },
 ];
 
-export const PLACEHOLDER_PREVIEW_URL = "/audio/1 - In Between.mp3";
-
 export const ARTISTS: string[] = buildArtists(ALBUMS)
 
 export function buildArtists(albums: Album[]): string[] {
@@ -415,11 +413,7 @@ export function albumQueue(a: Album): Track[] {
     album: a.title,
     color: a.color,
     imageUrl: a.imageUrl,
-    // Spotify albums: use preview from API (may be null → undefined), no local placeholder
-    // Static albums: use local placeholder MP3
-    previewUrl: a.spotifyTrackPreviews
-      ? a.spotifyTrackPreviews[i]
-      : PLACEHOLDER_PREVIEW_URL,
+    previewUrl: a.spotifyTrackPreviews?.[i],
     spotifyUri: a.spotifyTrackUris?.[i],
   }))
 }
@@ -433,8 +427,9 @@ export function artistQueue(name: string, albums: Album[] = ALBUMS): Track[] {
 }
 
 export function resolvePlaylistTrack(it: { a: string; i: number }): Track {
-  const a = ALBUMS.find((x) => x.id === it.a)!;
-  const [title, dur] = a.tracks[it.i];
+  const a = ALBUMS.find((x) => x.id === it.a)
+  if (!a) return { title: 'Unknown', dur: 0, artist: 'Unknown', album: 'Unknown', color: '#444' }
+  const [title, dur] = a.tracks[it.i]
   return {
     title,
     dur,
@@ -442,8 +437,7 @@ export function resolvePlaylistTrack(it: { a: string; i: number }): Track {
     album: a.title,
     color: a.color,
     imageUrl: a.imageUrl,
-    previewUrl: PLACEHOLDER_PREVIEW_URL,
-  };
+  }
 }
 
 export function playlistQueue(pl: Playlist): Track[] {

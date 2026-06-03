@@ -44,26 +44,18 @@ export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpen
   }, [tab, albums.length, totals.albums, likedTrackCount, totals.songs, userPlaylistCount, totals.playlists, loading, loadingMore.albums, loadingMore.tracks, loadingMore.playlists, loadMore])
 
   if (loading) {
-    return (
-      <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa' }}>
-        loading library…
-      </div>
-    )
+    return <WP8Loading />
   }
 
   if (error) {
-    return (
-      <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c', padding: 32, textAlign: 'center' }}>
-        failed to load library: {error}
-      </div>
-    )
+    return <WP8Error message={error} />
   }
 
   return (
     <div className="page">
       <Pivot tabs={TABS} active={tab} onChange={onTabChange} />
       <PivotArea tab={tab} {...swipe}>
-        <ArtistsTab artists={artists} albums={albums} hasMore={hasMore(likedTrackCount, totals.songs)} loadingMore={loadingMore.tracks} onLoadMore={() => loadMore('tracks')} onOpenArtist={onOpenArtist} onPlay={onPlay} />
+        <ArtistsTab artists={artists} albums={albums} hasMore={hasMore(albums.length, totals.albums)} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onPlay={onPlay} />
         <AlbumsTab albums={albums} total={totals.albums} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onOpenAlbum={onOpenAlbum} />
         <SongsTab songs={songs} likedTrackUris={likedTrackUris} hasMore={hasMore(likedTrackCount, totals.songs)} loadingMore={loadingMore.tracks} onLoadMore={() => loadMore('tracks')} onPlay={onPlay} />
         <GenresTab onOpenGenre={onOpenGenre} />
@@ -149,9 +141,10 @@ interface AlbumsProps {
 }
 
 function AlbumsTab({ albums, total, loadingMore, onLoadMore, onOpenArtist, onOpenAlbum }: AlbumsProps) {
+  const sorted = [...albums].sort((a, b) => a.title.localeCompare(b.title, 'en', { sensitivity: 'base' }))
   return (
     <div className="album-list">
-      {albums.map((a) => (
+      {sorted.map((a) => (
         <div key={a.id} className="album-group">
           <div className="group-head" onClick={() => onOpenArtist(a.artist)}>{a.artist}</div>
           <div className="album-row" onClick={() => onOpenAlbum(a)}>
@@ -170,23 +163,28 @@ function AlbumsTab({ albums, total, loadingMore, onLoadMore, onOpenArtist, onOpe
 
 // ── Songs ────────────────────────────────────────────────────────────────────
 function SongsTab({ songs, likedTrackUris, hasMore, loadingMore, onLoadMore, onPlay }: { songs: SongEntry[]; likedTrackUris: Set<string>; hasMore: boolean; loadingMore: boolean; onLoadMore: () => void; onPlay: (q: Track[], i: number) => void }) {
+  // Filter out songs with no title (can happen with local Spotify files).
+  // Build queue from valid entries so shuffle/next spans the full songs list.
+  const validSongs = songs.filter(s => s.title)
+  const allTracks: Track[] = validSongs.map(s => albumQueue(s.album)[s.idx]).filter(Boolean) as Track[]
+
   return (
     <div className="song-list">
-      {songs.map((s, i) => {
-        const letter = s.title[0].toUpperCase()
-        const prevLetter = i > 0 ? songs[i - 1].title[0].toUpperCase() : null
+      {validSongs.map((s, i) => {
+        const letter = (s.title[0] ?? '#').toUpperCase()
+        const prevLetter = i > 0 ? (validSongs[i - 1].title[0] ?? '#').toUpperCase() : null
         return (
-          <div key={s.album.id + s.title}>
+          <div key={s.album.id + s.title + i}>
             {letter !== prevLetter && <div className="index-tile">{letter}</div>}
             <div className="lrow">
               <button
                 className="play-circle"
                 aria-label={`Play ${s.title}`}
-                onClick={(e) => { e.stopPropagation(); onPlay(albumQueue(s.album), s.idx) }}
+                onClick={(e) => { e.stopPropagation(); onPlay(allTracks, i) }}
               >
                 {Icons.playCircle}
               </button>
-              <div className="lrow-name song" onClick={() => onPlay(albumQueue(s.album), s.idx)}>
+              <div className="lrow-name song" onClick={() => onPlay(allTracks, i)}>
                 <div className="lrow-title">{s.title}</div>
                 <div className="lrow-sub">{s.artist}</div>
               </div>
@@ -222,7 +220,7 @@ function PlaylistsTab({ playlists, total, loadingMore, onLoadMore, onOpenPlaylis
   return (
     <div className="pl-list">
       {playlists.map((pl) => {
-        const tracks = pl.tracks ?? pl.items.map(it => resolvePlaylistTrack(it))
+        const tracks = pl.tracks ?? (pl.items ?? []).map(it => resolvePlaylistTrack(it))
         const cols = tracks.slice(0, 4).map(t => t.color)
         const count = pl.totalTracks ?? (tracks.length || pl.items.length)
         while (cols.length < 4) cols.push(cols[cols.length - 1] ?? '#444')
@@ -265,6 +263,31 @@ function RadioTab({ artists, albums, onPlay }: RadioProps) {
         </div>
       ))}
       <div style={{ height: 80 }} />
+    </div>
+  )
+}
+
+// ── WP8-style error screen ───────────────────────────────────────────────────
+function WP8Error({ message }: { message: string }) {
+  return (
+    <div className="wp8-loading">
+      <div className="wp8-error-icon">!</div>
+      <div className="wp8-error-title">something went wrong</div>
+      <div className="wp8-error-msg">{message}</div>
+    </div>
+  )
+}
+
+// ── WP8-style loading screen ─────────────────────────────────────────────────
+function WP8Loading() {
+  return (
+    <div className="wp8-loading">
+      <div className="wp8-dots">
+        {[0, 1, 2, 3, 4].map(i => (
+          <span key={i} className="wp8-dot" style={{ animationDelay: `${i * 120}ms` }} />
+        ))}
+      </div>
+      <div className="wp8-label">zplayer</div>
     </div>
   )
 }

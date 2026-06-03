@@ -101,7 +101,8 @@ export async function handleCallback(): Promise<boolean> {
     }),
   })
   if (!res.ok) return false
-  const d = await res.json() as { access_token: string; refresh_token: string; expires_in: number }
+  const d = await res.json() as { access_token?: string; refresh_token?: string; expires_in?: number }
+  if (!d.access_token || !d.refresh_token || !d.expires_in) return false
   persist(d.access_token, d.refresh_token, d.expires_in)
   return true
 }

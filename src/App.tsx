@@ -79,7 +79,8 @@ interface ContentProps {
 }
 
 function AppContent({ token, onLogout }: ContentProps) {
-  const spotifyEngine = useSpotifyPlayer(Boolean(token))
+  const [sdkError, setSdkError] = useState<string | null>(null)
+  const spotifyEngine = useSpotifyPlayer(Boolean(token), onLogout, setSdkError)
   const pb            = usePlayback(spotifyEngine)
   const theme         = useTheme()
   const { albums }    = useLibrary()
@@ -101,6 +102,7 @@ function AppContent({ token, onLogout }: ContentProps) {
     setNavStack(s => s.map((f, i) => i === s.length - 1 ? { ...f, tab } as NavFrame : f))
 
   const playAndGo = (queue: ReturnType<typeof albumQueue>, idx: number) => {
+    if (queue.length === 0) return
     pb.play(queue, idx)
     push({ screen: 'nowplaying' })
   }
@@ -192,6 +194,8 @@ function AppContent({ token, onLogout }: ContentProps) {
         <Settings
           theme={theme}
           token={token}
+          sdkError={sdkError}
+          onClearSdkError={() => setSdkError(null)}
           onLogout={onLogout}
           onClose={() => setShowSettings(false)}
         />
@@ -208,14 +212,19 @@ function AppContent({ token, onLogout }: ContentProps) {
 interface SettingsProps {
   theme: ReturnType<typeof useTheme>
   token: string | null
+  sdkError: string | null
+  onClearSdkError: () => void
   onLogout: () => void
   onClose: () => void
 }
 
-function Settings({ theme, token, onLogout, onClose }: SettingsProps) {
+function Settings({ theme, token, sdkError, onClearSdkError, onLogout, onClose }: SettingsProps) {
   const [clientId, setClientIdState] = useState(getClientId)
   const [loginError, setLoginError]  = useState('')
-  const loggedIn = Boolean(token) || hasStoredTokens()
+  // Only trust token from App state — hasStoredTokens() can be true even after
+  // a failed refresh (expired refresh token). Showing "connected" in that case
+  // confuses the user since the session is actually dead.
+  const loggedIn = Boolean(token)
 
   const handleLogin = async () => {
     setLoginError('')
@@ -294,10 +303,22 @@ function Settings({ theme, token, onLogout, onClose }: SettingsProps) {
       )}
 
       {loggedIn && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
-          <span style={{ color: '#1db954', fontSize: 13 }}>● connected</span>
-          <button className="theme-btn" onClick={onLogout}>disconnect</button>
-        </div>
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+            <span style={{ color: '#1db954', fontSize: 13 }}>● connected</span>
+            <button className="theme-btn" onClick={onLogout}>disconnect</button>
+          </div>
+          {sdkError && (
+            <div className="settings-hint" style={{ color: '#e74c3c', marginTop: 8, whiteSpace: 'pre-line' }}>
+              {sdkError}
+              <button
+                style={{ marginLeft: 8, background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontSize: 13 }}
+                onClick={onClearSdkError}
+                aria-label="Dismiss"
+              >✕</button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

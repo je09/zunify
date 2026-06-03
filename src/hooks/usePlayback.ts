@@ -7,6 +7,9 @@
 //
 //   'audio' — <audio> element for any URL (preview_url, local MP3).
 //              Activated when track has previewUrl and SDK engine not active.
+//              Audio element is persistent (created once) — src is swapped.
+//              play() is called synchronously in user-gesture callbacks so
+//              iOS doesn't block it.
 //
 //   'raf'   — requestAnimationFrame timer simulation (no real audio).
 //              Fallback when neither of the above applies.
@@ -48,19 +51,55 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const [repeat, setRepeat]   = useState<0 | 1 | 2>(0)
   const [started, setStarted] = useState(false)
 
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const rafRef   = useRef(0)
-  const lastRef  = useRef(0)
+  // Persistent audio element — never recreated, src is swapped on track change.
+  // This keeps play() calls in gesture context (iOS requires it).
+  const audioRef   = useRef<HTMLAudioElement>(new Audio())
+  const rafRef     = useRef(0)
+  const lastRef    = useRef(0)
+
+  // Refs for values used inside closures that must never be stale.
+  const repeatRef  = useRef<0 | 1 | 2>(0)
+  const shuffleRef = useRef(false)
+  const queueRef   = useRef(queue)
+  const playingRef = useRef(false)
+  // Stable refs to latest callbacks — used by Media Session handlers so they
+  // don't need to be re-registered on every dep change.
+  const nextCbRef   = useRef<() => void>(() => {})
+  const prevCbRef   = useRef<() => void>(() => {})
+  const seekCbRef   = useRef<(f: number) => void>(() => {})
+  const trackRef    = useRef(queue[0])
+  // Set to true by the play() callback so the track-change effect knows
+  // audio is already playing and should not reload (avoids iOS double-play).
+  const gestureDidPlayRef = useRef(false)
+
+  repeatRef.current  = repeat
+  shuffleRef.current = shuffle
+  queueRef.current   = queue
+  playingRef.current = playing
+  trackRef.current   = queue[idx] ?? queue[0]
 
   const track = queue[idx] ?? queue[0]
 
-  // Active engine for the current track
   const engine: 'sdk' | 'audio' | 'raf' =
     spotify != null && Boolean(track?.spotifyUri) ? 'sdk'
     : Boolean(track?.previewUrl) ? 'audio'
     : 'raf'
 
-  // ── Media Session ────────────────────────────────────────────────────────
+  // ── advanceQueue ──────────────────────────────────────────────────────────
+  const advanceQueue = useCallback(() => {
+    setIdx(i => {
+      const q = queueRef.current
+      if (shuffleRef.current) {
+        let n: number
+        do { n = Math.floor(Math.random() * q.length) } while (n === i && q.length > 1)
+        return n
+      }
+      return (i + 1) % q.length
+    })
+    setTime(0)
+  }, [])
+
+  // ── Media Session ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
     navigator.mediaSession.metadata = new MediaMetadata({
@@ -74,13 +113,14 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     navigator.mediaSession.setActionHandler('play', () => setPlaying(true))
     navigator.mediaSession.setActionHandler('pause', () => setPlaying(false))
     navigator.mediaSession.setActionHandler('nexttrack', () => {
-      setIdx(i => (i + 1) % queue.length); setTime(0)
+      setIdx(i => (i + 1) % queueRef.current.length); setTime(0)
     })
     navigator.mediaSession.setActionHandler('previoustrack', () => {
-      setIdx(i => (i - 1 + queue.length) % queue.length); setTime(0)
+      setIdx(i => (i - 1 + queueRef.current.length) % queueRef.current.length); setTime(0)
     })
-  }, [track.title, track.artist, track.album, track.imageUrl, queue.length])
+  }, [track.title, track.artist, track.album, track.imageUrl])
 
+  // ── Prefetch next tracks ──────────────────────────────────────────────────
   useEffect(() => {
     const nextTracks = Array.from({ length: Math.min(5, queue.length - 1) }, (_, i) => queue[(idx + i + 1) % queue.length])
     const images: HTMLImageElement[] = []
@@ -109,67 +149,84 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     }
   }, [idx, queue])
 
-  // ── SDK state sync (engine === 'sdk') ────────────────────────────────────
+  // ── Persistent audio element — attach listeners once ──────────────────────
   useEffect(() => {
-    if (engine !== 'sdk' || !spotify?.sdkState) return
-    const s = spotify.sdkState
-    setTime(s.position / 1000)
-    setPlaying(!s.paused)
-
-    // SDK overwrites media session with "Spotify Embedded Player" — override it
-    if ('mediaSession' in navigator) {
-      const ct = s.track_window.current_track
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: ct.name,
-        artist: ct.artists.map(a => a.name).join(', '),
-        album: ct.album.name,
-        artwork: ct.album.images[0]
-          ? [{ src: ct.album.images[0].url, sizes: '300x300', type: 'image/jpeg' }]
-          : [],
-      })
-    }
-
-    const uri = s.track_window.current_track.uri
-    const newIdx = queue.findIndex(t => t.spotifyUri === uri)
-    if (newIdx !== -1 && newIdx !== idx) setIdx(newIdx)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spotify?.sdkState])
-
-  // ── Audio element lifecycle (engine === 'audio') ─────────────────────────
-  useEffect(() => {
-    if (engine !== 'audio') return
-
-    const audio = new Audio(track.previewUrl!)
-    audio.preload = 'auto'
-    audioRef.current = audio
+    const audio = audioRef.current
 
     const onTimeUpdate = () => setTime(audio.currentTime)
     const onEnded = () => {
-      if (repeat === 2) { audio.currentTime = 0; void audio.play(); return }
+      // Use ref so this closure never sees stale repeat value.
+      if (repeatRef.current === 2) { audio.currentTime = 0; void audio.play(); return }
       advanceQueue()
     }
 
     audio.addEventListener('timeupdate', onTimeUpdate)
     audio.addEventListener('ended', onEnded)
 
-    if (playing) void audio.play()
-
     return () => {
       audio.pause()
       audio.removeEventListener('timeupdate', onTimeUpdate)
       audio.removeEventListener('ended', onEnded)
-      audioRef.current = null
+      audio.src = ''
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track.previewUrl, idx, engine])
+  }, [advanceQueue])
 
+  // ── Audio: update src on track change (next/prev/auto-advance) ────────────
+  // play() sets gestureDidPlayRef before triggering a re-render so this effect
+  // can skip the reload — audio is already playing in the right gesture context.
+  // For all other idx changes (next, prev, auto-advance, shuffle) we always
+  // reload so the new track actually starts.
   useEffect(() => {
-    if (engine !== 'audio' || !audioRef.current) return
-    if (playing) void audioRef.current.play()
-    else audioRef.current.pause()
+    const audio = audioRef.current
+    if (engine !== 'audio') { audio.pause(); return }
+
+    if (gestureDidPlayRef.current) {
+      gestureDidPlayRef.current = false
+      return
+    }
+
+    const newSrc = track.previewUrl ?? ''
+    audio.src = newSrc
+    if (newSrc) {
+      audio.load()
+      if (playingRef.current) void audio.play()
+    }
+  }, [track.previewUrl, engine, idx])
+
+  // ── Audio: sync play/pause state ──────────────────────────────────────────
+  useEffect(() => {
+    const audio = audioRef.current
+    if (engine !== 'audio') return
+    if (playing && audio.paused && audio.src) void audio.play()
+    if (!playing && !audio.paused) audio.pause()
   }, [playing, engine])
 
-  // ── RAF simulation (engine === 'raf') ────────────────────────────────────
+  // ── SDK state sync (engine === 'sdk') ─────────────────────────────────────
+  useEffect(() => {
+    if (engine !== 'sdk' || !spotify?.sdkState) return
+    const s = spotify.sdkState
+    setTime(s.position / 1000)
+    setPlaying(!s.paused)
+
+    if ('mediaSession' in navigator) {
+      const ct = s.track_window.current_track
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: ct.name,
+        artist: ct.artists.map(a => a.name).join(', '),
+        album: ct.album.name,
+        artwork: ct.album.images?.[0]
+          ? [{ src: ct.album.images[0].url, sizes: '300x300', type: 'image/jpeg' }]
+          : [],
+      })
+    }
+
+    const uri = s.track_window.current_track.uri
+    const newIdx = queueRef.current.findIndex(t => t.spotifyUri === uri)
+    if (newIdx !== -1 && newIdx !== idx) setIdx(newIdx)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spotify?.sdkState])
+
+  // ── RAF simulation (engine === 'raf') ─────────────────────────────────────
   useEffect(() => {
     if (engine !== 'raf' || !playing) {
       cancelAnimationFrame(rafRef.current)
@@ -182,7 +239,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
         setTime(tm => {
           const nt = tm + (ts - lastRef.current) / 1000
           if (nt >= track.dur) {
-            if (repeat === 2) return 0
+            if (repeatRef.current === 2) return 0
             advanceQueue()
             return 0
           }
@@ -194,33 +251,41 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     }
     rafRef.current = requestAnimationFrame(step)
     return () => { cancelAnimationFrame(rafRef.current); lastRef.current = 0 }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, engine, idx, repeat, track.dur])
+  }, [playing, engine, idx, track.dur, advanceQueue])
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
-  const advanceQueue = useCallback(() => {
-    setIdx(i => {
-      if (shuffle) {
-        let n: number
-        do { n = Math.floor(Math.random() * queue.length) } while (n === i && queue.length > 1)
-        return n
-      }
-      return (i + 1) % queue.length
-    })
-    setTime(0)
-  }, [shuffle, queue.length])
+  // ── Callbacks ─────────────────────────────────────────────────────────────
 
   const play = useCallback((q: Track[], i: number) => {
+    if (q.length === 0) return
+    const t = q[i]
     setQueue(q)
     setIdx(i)
     setTime(0)
     setPlaying(true)
     setStarted(true)
 
-    if (spotify && q[i]?.spotifyUri) {
-      const uris = q.flatMap(t => t.spotifyUri ? [t.spotifyUri] : [])
-      const offset = q.slice(0, i).filter(t => t.spotifyUri).length
-      void spotify.startPlayback(uris, offset)
+    if (spotify && t?.spotifyUri) {
+      const allUris = q.flatMap(t => t.spotifyUri ? [t.spotifyUri] : [])
+      const offsetInAll = q.slice(0, i).filter(t => t.spotifyUri).length
+      // Spotify rejects bodies over ~1 MB (413). Cap at 300 URIs, starting
+      // from the selected track and wrapping, so the full queue is reachable
+      // via next/prev within Spotify's context.
+      const MAX = 300
+      const windowUris = [
+        ...allUris.slice(offsetInAll),
+        ...allUris.slice(0, offsetInAll),
+      ].slice(0, MAX)
+      void spotify.startPlayback(windowUris, 0)
+    } else if (t?.previewUrl) {
+      // Call play() synchronously in the user-gesture call stack.
+      // iOS blocks audio.play() once we cross an async boundary (useEffect
+      // runs after render). gestureDidPlayRef tells the track-change effect
+      // that audio is already running so it skips the reload.
+      const audio = audioRef.current
+      audio.src = t.previewUrl
+      audio.load()
+      gestureDidPlayRef.current = true
+      void audio.play()
     }
   }, [spotify])
 
@@ -228,6 +293,11 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     if (engine === 'sdk' && spotify?.player) {
       void spotify.player.togglePlay()
       return
+    }
+    if (engine === 'audio') {
+      // Call play/pause synchronously in gesture context (iOS-safe).
+      if (playingRef.current) audioRef.current.pause()
+      else void audioRef.current.play()
     }
     setPlaying(p => !p)
   }, [engine, spotify])
@@ -247,12 +317,12 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     }
     if (time > 3) {
       setTime(0)
-      if (audioRef.current) audioRef.current.currentTime = 0
+      audioRef.current.currentTime = 0
       return
     }
-    setIdx(i => (i - 1 + queue.length) % queue.length)
+    setIdx(i => (i - 1 + queueRef.current.length) % queueRef.current.length)
     setTime(0)
-  }, [engine, spotify, time, queue.length])
+  }, [engine, spotify, time])
 
   const seek = useCallback((fraction: number) => {
     if (engine === 'sdk' && spotify?.player) {
@@ -262,12 +332,31 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     }
     const t = fraction * track.dur
     setTime(t)
-    if (audioRef.current) audioRef.current.currentTime = t
+    audioRef.current.currentTime = t
   }, [engine, spotify, track.dur])
 
-  const toggleFav     = useCallback(() => setFav(v => !v), [])
-  const toggleShuffle = useCallback(() => setShuffle(v => !v), [])
-  const cycleRepeat   = useCallback(() => setRepeat(r => ((r + 1) % 3) as 0 | 1 | 2), [])
+  const toggleFav   = useCallback(() => setFav(v => !v), [])
+  const cycleRepeat = useCallback(() => setRepeat(r => ((r + 1) % 3) as 0 | 1 | 2), [])
+
+  const toggleShuffle = useCallback(() => {
+    setShuffle(prev => {
+      const next = !prev
+      if (next) {
+        // Physically shuffle tracks after the current position so UP NEXT
+        // immediately reflects the shuffled order (Fisher-Yates in-place).
+        setQueue(q => {
+          const curIdx = queueRef.current === q ? idx : 0
+          const after = [...q.slice(curIdx + 1)]
+          for (let i = after.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1))
+            ;[after[i], after[j]] = [after[j], after[i]]
+          }
+          return [...q.slice(0, curIdx + 1), ...after]
+        })
+      }
+      return next
+    })
+  }, [idx])
 
   return {
     queue, idx, track, playing, time, fav, shuffle, repeat, started,

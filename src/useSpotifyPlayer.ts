@@ -33,7 +33,11 @@ function loadSdk(): Promise<void> {
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
-export function useSpotifyPlayer(enabled: boolean): SpotifyEngine | null {
+export function useSpotifyPlayer(
+  enabled: boolean,
+  onAuthFailed?: () => void,
+  onError?: (msg: string) => void,
+): SpotifyEngine | null {
   const [engine, setEngine] = useState<SpotifyEngine | null>(null)
   const playerRef = useRef<Spotify.Player | null>(null)
 
@@ -52,7 +56,15 @@ export function useSpotifyPlayer(enabled: boolean): SpotifyEngine | null {
 
       const player = new window.Spotify.Player({
         name: 'zPlayer',
-        getOAuthToken: (cb) => { void getValidToken().then(t => { if (t) cb(t) }) },
+        getOAuthToken: (cb) => {
+          void getValidToken().then(t => {
+            if (t) { cb(t); return }
+            // Token fetch returned null — refresh failed or tokens cleared.
+            // Signal the app so it can log the user out rather than leaving
+            // the SDK hung waiting for a token that will never arrive.
+            onAuthFailed?.()
+          })
+        },
         volume: 0.8,
       })
       playerRef.current = player
@@ -63,20 +75,28 @@ export function useSpotifyPlayer(enabled: boolean): SpotifyEngine | null {
         const startPlayback = async (uris: string[], offsetIndex: number): Promise<void> => {
           const token = await getValidToken()
           if (!token || uris.length === 0) return
-          await fetch(
+
+          const body = JSON.stringify({ uris, offset: { position: Math.max(0, offsetIndex) } })
+          const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+          const res = await fetch(
             `https://api.spotify.com/v1/me/player/play?device_id=${device_id}`,
-            {
-              method: 'PUT',
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                uris,
-                offset: { position: Math.max(0, offsetIndex) },
-              }),
-            }
+            { method: 'PUT', headers, body }
           )
+
+          if (res.status === 404) {
+            // Device not yet active — transfer playback to it first, then retry.
+            await fetch('https://api.spotify.com/v1/me/player', {
+              method: 'PUT',
+              headers,
+              body: JSON.stringify({ device_ids: [device_id] }),
+            })
+            await new Promise(r => setTimeout(r, 400))
+            await fetch(
+              `https://api.spotify.com/v1/me/player/play?device_id=${device_id}`,
+              { method: 'PUT', headers, body }
+            )
+          }
         }
 
         setEngine(prev => ({
@@ -96,17 +116,20 @@ export function useSpotifyPlayer(enabled: boolean): SpotifyEngine | null {
         if (live) setEngine(null)
       })
 
-      player.addListener('account_error', ({ message }) => {
-        console.warn('Spotify: Premium required for full-track playback.', message)
-        // Non-premium: engine stays null, preview_url fallback used
+      player.addListener('account_error', () => {
+        // Non-premium account: SDK can't do full-track playback; fall through
+        // to preview_url engine. Surface a visible message so the user knows.
+        onError?.('Spotify Premium required for full-track playback. Playing 30 s previews instead.')
       })
 
-      player.addListener('initialization_error', ({ message }) =>
-        console.error('Spotify SDK init error:', message)
-      )
-      player.addListener('authentication_error', ({ message }) =>
-        console.error('Spotify SDK auth error:', message)
-      )
+      player.addListener('initialization_error', ({ message }) => {
+        onError?.(`Spotify player failed to initialise: ${message}`)
+      })
+
+      player.addListener('authentication_error', () => {
+        // Auth rejected by Spotify — force logout so the user can reconnect.
+        onAuthFailed?.()
+      })
 
       void player.connect()
     })
@@ -117,7 +140,7 @@ export function useSpotifyPlayer(enabled: boolean): SpotifyEngine | null {
       playerRef.current = null
       setEngine(null)
     }
-  }, [enabled])
+  }, [enabled, onAuthFailed, onError])
 
   return engine
 }

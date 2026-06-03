@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react'
 import {
   Album, Playlist, SongEntry, Track,
   buildArtists, buildSongs,
@@ -105,15 +105,6 @@ function trackAlbum(track: Track): Album {
   }
 }
 
-function buildSpotifyArtists(albums: Album[], tracks: Track[]): string[] {
-  return [...new Set([...buildArtists(albums), ...tracks.map(track => track.artist)])].sort(
-    (x, y) => x.replace(/^the\s+/i, '').localeCompare(y.replace(/^the\s+/i, ''), 'en', { sensitivity: 'base' })
-  )
-}
-
-function buildSpotifySongs(albums: Album[], tracks: Track[]): SongEntry[] {
-  return buildSongs(mergeAlbums(albums, albumsFromTracks(tracks)))
-}
 
 function albumsFromTracks(tracks: Track[]): Album[] {
   const albums = new Map<string, Album>()
@@ -133,12 +124,16 @@ function albumsFromTracks(tracks: Track[]): Album[] {
 function buildSpotifyLibrary({ albums, playlists, totals }: SpotifyLibraryData): Library {
   const tracks = likedTracks(playlists)
   const likedTrackUris = new Set(tracks.map(track => track.spotifyUri).filter((uri): uri is string => !!uri))
-  const albumsWithLikedTracks = mergeAlbums(albums, albumsFromTracks(tracks))
+
+  // Albums and artists tabs show ONLY saved albums — not synthetic albums
+  // derived from liked tracks. Liked songs appear only in the songs tab and
+  // the "liked songs" playlist, keeping the albums/artists tabs clean.
+  const songsAlbums = mergeAlbums(albums, albumsFromTracks(tracks))
 
   return {
-    albums: albumsWithLikedTracks,
-    artists: buildSpotifyArtists(albumsWithLikedTracks, tracks),
-    songs: buildSpotifySongs(albumsWithLikedTracks, tracks),
+    albums,
+    artists: buildArtists(albums),
+    songs: buildSongs(songsAlbums),
     playlists,
     likedTrackUris,
     loading: false,
@@ -237,6 +232,9 @@ export function LibraryProvider({ token, children }: Props) {
   const loadingTracksRef = useRef(false)
   const likedLoadedRef = useRef(false)
   const loadingPlaylistTracksRef = useRef<Record<string, boolean>>({})
+  // Ref mirror of lib.playlists so loadMorePlaylistTracks can read the latest
+  // value without adding lib.playlists as a dep (which causes excess recreation).
+  const playlistsRef = useRef(lib.playlists)
 
   const saveCache = useCallback((albums: Album[], playlists: Playlist[], totals: LibraryTotals) => {
     writeSpotifyLibraryCache({
@@ -357,7 +355,10 @@ export function LibraryProvider({ token, children }: Props) {
   const loadMorePlaylistTracks = useCallback((playlistId: string) => {
     if (!tokenRef.current || loadingPlaylistTracksRef.current[playlistId]) return
 
-    const playlist = lib.playlists.find(pl => pl.id === playlistId)
+    // Read current playlists via ref to avoid adding lib.playlists as dep
+    // (which would recreate this callback on every playlist update, causing
+    // downstream effects in PlaylistDetail to re-fire unnecessarily).
+    const playlist = playlistsRef.current.find(pl => pl.id === playlistId)
     if (!playlist?.trackNextUrl) return
 
     loadingPlaylistTracksRef.current = { ...loadingPlaylistTracksRef.current, [playlistId]: true }
@@ -385,7 +386,7 @@ export function LibraryProvider({ token, children }: Props) {
         loadingPlaylistTracksRef.current = { ...loadingPlaylistTracksRef.current, [playlistId]: false }
         setLib(prev => ({ ...prev, loadingMore: { ...prev.loadingMore, playlistTracks: { ...prev.loadingMore.playlistTracks, [playlistId]: false } } }))
       })
-  }, [lib.playlists, loadMore, saveCache])
+  }, [saveCache])
 
   useEffect(() => {
     tokenRef.current = token
@@ -414,8 +415,57 @@ export function LibraryProvider({ token, children }: Props) {
     nextPlaylistsRef.current = undefined
     nextTracksRef.current = undefined
     likedLoadedRef.current = false
-    setLib(EMPTY)
+    // Show loading spinner while first pages arrive, then kick them off
+    // directly. Collection's useEffect has `if (loading) return` so it won't
+    // call loadMore while the spinner is active — we must do it here instead.
+    setLib({ ...EMPTY, loading: true })
+    loadMore('albums')
+    loadMore('playlists')
   }, [token, loadMore])
+
+  // ── Background sync ────────────────────────────────────────────────────────
+  // After the initial cache snapshot is shown, continue fetching remaining
+  // pages in the background at a controlled rate (350 ms between requests).
+  // Uses the same loadMore machinery so loading-ref guards prevent duplicates.
+  // Sequential by kind (albums → playlists → tracks) to stay well under
+  // Spotify's rate limit without a separate token bucket.
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+
+    const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+
+    async function drainKind(
+      kind: LibraryPageKind,
+      loadingRef: React.MutableRefObject<boolean>,
+      nextRef:    React.MutableRefObject<string | null | undefined>,
+    ) {
+      while (!cancelled && nextRef.current !== null) {
+        if (loadingRef.current) { await sleep(200); continue }
+        loadMore(kind)
+        // Wait for the fetch to start (ref flips to true)
+        await sleep(100)
+        // Wait for the fetch to finish (ref flips back to false)
+        while (!cancelled && loadingRef.current) await sleep(200)
+        // Respectful pause before next request
+        if (!cancelled) await sleep(350)
+      }
+    }
+
+    async function sync() {
+      // Give the initial render time to settle before starting.
+      await sleep(600)
+      await drainKind('albums',    loadingAlbumsRef,    nextAlbumsRef)
+      await drainKind('playlists', loadingPlaylistsRef, nextPlaylistsRef)
+      await drainKind('tracks',    loadingTracksRef,    nextTracksRef)
+    }
+
+    void sync()
+    return () => { cancelled = true }
+  }, [token, loadMore])
+
+  // Keep ref in sync so loadMorePlaylistTracks always sees current playlists.
+  playlistsRef.current = lib.playlists
 
   return <LibraryContext.Provider value={{ ...lib, loadMore, loadMorePlaylistTracks }}>{children}</LibraryContext.Provider>
 }

@@ -10,7 +10,7 @@ interface Props {
 }
 
 export function Player({ pb, onBack }: Props) {
-  const { track, queue, idx, playing, time, fav, shuffle, repeat,
+  const { track, upNext, playing, time, fav, shuffle, repeat,
           toggle, next, prev, seek, toggleFav, toggleShuffle, cycleRepeat } = pb
   const { likedTrackUris } = useLibrary()
 
@@ -26,13 +26,13 @@ export function Player({ pb, onBack }: Props) {
 
       {/* scrollable body — pushes transport to bottom */}
       <div className="np-body">
-        <div className="meta swap" key={'m' + idx}>
+        <div className="meta swap" key={'m' + track.title}>
           <div className="np-artist">{track.artist}</div>
           <div className="np-album">{track.album}</div>
         </div>
 
         <div className="artrow">
-          <div className="art swap" key={'a' + idx} style={{ background: track.color }}>
+          <div className="art swap" key={'a' + track.title} style={{ background: track.color }}>
             {track.imageUrl && <img src={track.imageUrl} alt="" decoding="async" />}
           </div>
           <div className="sideicons">
@@ -54,12 +54,11 @@ export function Player({ pb, onBack }: Props) {
           <span className="remain">-{fmt(track.dur - time)}</span>
         </div>
 
-        <div className="np-track swap" key={'t' + idx}>
+        <div className="np-track swap" key={'t' + track.title}>
           <div className="title">{track.title}</div>
-          {queue.length > 1 && (
+          {upNext.length > 0 && (
             <div className="upnext">
-              <div>{queue[(idx + 1) % queue.length].title}</div>
-              {queue.length > 2 && <div>{queue[(idx + 2) % queue.length].title}</div>}
+              {upNext.map((t, i) => <div key={i}>{t.title}</div>)}
             </div>
           )}
         </div>

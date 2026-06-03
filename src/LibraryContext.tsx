@@ -77,12 +77,67 @@ const EMPTY: Library = {
 
 const LibraryContext = createContext<Library>(DEFAULT)
 
-const SPOTIFY_LIBRARY_CACHE_KEY = 'zplayer_spotify_library_v2'
+// ── IndexedDB cache ───────────────────────────────────────────────────────────
+// Async, no quota, no JSON serialization on main thread.
+// One-time cleanup: remove old localStorage cache if it exists.
+try { localStorage.removeItem('zplayer_spotify_library_v2') } catch {}
 
 type SpotifyLibraryCache = Pick<Library, 'albums' | 'playlists' | 'totals'> & {
   nextAlbums: string | null
   nextPlaylists: string | null
   nextTracks?: string | null
+}
+
+let _idb: Promise<IDBDatabase> | null = null
+
+function openIdb(): Promise<IDBDatabase> {
+  if (_idb) return _idb
+  _idb = new Promise((resolve, reject) => {
+    const req = indexedDB.open('zplayer', 1)
+    req.onupgradeneeded = () => req.result.createObjectStore('library')
+    req.onsuccess = () => resolve(req.result)
+    req.onerror   = () => reject(req.error)
+  })
+  return _idb
+}
+
+async function idbRead(): Promise<SpotifyLibraryCache | null> {
+  try {
+    const db = await openIdb()
+    return new Promise((resolve, reject) => {
+      const req = db.transaction('library', 'readonly').objectStore('library').get('cache')
+      req.onsuccess = () => resolve((req.result as SpotifyLibraryCache) ?? null)
+      req.onerror   = () => reject(req.error)
+    })
+  } catch { return null }
+}
+
+async function idbWrite(cache: SpotifyLibraryCache): Promise<void> {
+  // Strip expiring CDN preview URLs and large playlist track arrays.
+  const stripped: SpotifyLibraryCache = {
+    ...cache,
+    albums:    cache.albums.map(({ spotifyTrackPreviews: _, ...a }) => a),
+    playlists: cache.playlists.map(({ tracks: _, ...pl }) => ({ ...pl, items: pl.items ?? [] })),
+  }
+  try {
+    const db = await openIdb()
+    await new Promise<void>((resolve, reject) => {
+      const req = db.transaction('library', 'readwrite').objectStore('library').put(stripped, 'cache')
+      req.onsuccess = () => resolve()
+      req.onerror   = () => reject(req.error)
+    })
+  } catch { /* silently fail — live data works without cache */ }
+}
+
+async function idbClear(): Promise<void> {
+  try {
+    const db = await openIdb()
+    await new Promise<void>((resolve, reject) => {
+      const req = db.transaction('library', 'readwrite').objectStore('library').delete('cache')
+      req.onsuccess = () => resolve()
+      req.onerror   = () => reject(req.error)
+    })
+  } catch {}
 }
 
 interface SpotifyLibraryData extends Pick<Library, 'albums' | 'playlists' | 'totals'> {}
@@ -146,31 +201,6 @@ function buildSpotifyLibrary({ albums, playlists, totals }: SpotifyLibraryData):
   }
 }
 
-function readSpotifyLibraryCache(): SpotifyLibraryCache | null {
-  try {
-    const raw = localStorage.getItem(SPOTIFY_LIBRARY_CACHE_KEY)
-    if (!raw) return null
-    return JSON.parse(raw) as SpotifyLibraryCache
-  } catch {
-    localStorage.removeItem(SPOTIFY_LIBRARY_CACHE_KEY)
-    return null
-  }
-}
-
-function writeSpotifyLibraryCache(lib: SpotifyLibraryCache) {
-  try {
-    // Strip expiring CDN preview URLs — they expire, pointless to store.
-    // Strip playlist tracks — can be 300KB+ for liked songs; load on demand.
-    const stripped: SpotifyLibraryCache = {
-      ...lib,
-      albums: lib.albums.map(({ spotifyTrackPreviews: _, ...a }) => a),
-      playlists: lib.playlists.map(({ tracks: _, ...pl }) => ({ ...pl, items: pl.items ?? [] })),
-    }
-    localStorage.setItem(SPOTIFY_LIBRARY_CACHE_KEY, JSON.stringify(stripped))
-  } catch {
-    // Ignore quota/private-mode failures; live Spotify data still works.
-  }
-}
 
 function likedSongsPlaylist(tracks: Track[], totalTracks = tracks.length): Playlist {
   return {
@@ -244,7 +274,7 @@ export function LibraryProvider({ token, children }: Props) {
   const playlistsRef = useRef(lib.playlists)
 
   const saveCache = useCallback((albums: Album[], playlists: Playlist[], totals: LibraryTotals) => {
-    writeSpotifyLibraryCache({
+    void idbWrite({
       albums,
       playlists,
       totals,
@@ -404,30 +434,42 @@ export function LibraryProvider({ token, children }: Props) {
       nextTracksRef.current = undefined
       likedLoadedRef.current = false
       setLib(DEFAULT)
+      void idbClear()
       return
     }
 
-    const cached = readSpotifyLibraryCache()
+    let cancelled = false
 
-    if (cached) {
-      nextAlbumsRef.current = cached.nextAlbums ?? (cached.totals.albums === null || cached.albums.length < cached.totals.albums ? undefined : null)
+    const applyCache = (cached: SpotifyLibraryCache) => {
+      nextAlbumsRef.current   = cached.nextAlbums   ?? (cached.totals.albums   === null || cached.albums.length < cached.totals.albums ? undefined : null)
       nextPlaylistsRef.current = cached.nextPlaylists ?? (cached.totals.playlists === null || cached.playlists.filter(pl => pl.id !== 'sp_liked').length < cached.totals.playlists ? undefined : null)
-      nextTracksRef.current = cached.nextTracks ?? cached.playlists.find(pl => pl.id === 'sp_liked')?.trackNextUrl ?? (cached.totals.songs === null || likedTracks(cached.playlists).length < cached.totals.songs ? undefined : null)
-      likedLoadedRef.current = cached.playlists.some(pl => pl.id === 'sp_liked')
+      nextTracksRef.current   = cached.nextTracks   ?? cached.playlists.find(pl => pl.id === 'sp_liked')?.trackNextUrl ?? (cached.totals.songs === null || likedTracks(cached.playlists).length < cached.totals.songs ? undefined : null)
+      likedLoadedRef.current  = cached.playlists.some(pl => pl.id === 'sp_liked')
       setLib(buildSpotifyLibrary(cached))
-      return
     }
 
-    nextAlbumsRef.current = undefined
-    nextPlaylistsRef.current = undefined
-    nextTracksRef.current = undefined
-    likedLoadedRef.current = false
-    // Show loading spinner while first pages arrive, then kick them off
-    // directly. Collection's useEffect has `if (loading) return` so it won't
-    // call loadMore while the spinner is active — we must do it here instead.
-    setLib({ ...EMPTY, loading: true })
-    loadMore('albums')
-    loadMore('playlists')
+    const startFresh = () => {
+      nextAlbumsRef.current = undefined
+      nextPlaylistsRef.current = undefined
+      nextTracksRef.current = undefined
+      likedLoadedRef.current = false
+      // Show loading spinner while first pages arrive, then kick them off
+      // directly. Collection's useEffect has `if (loading) return` so it won't
+      // call loadMore while the spinner is active — we must do it here instead.
+      setLib({ ...EMPTY, loading: true })
+      loadMore('albums')
+      loadMore('playlists')
+    }
+
+    idbRead().then(cached => {
+      if (cancelled) return
+      if (cached) applyCache(cached)
+      else startFresh()
+    }).catch(() => {
+      if (!cancelled) startFresh()
+    })
+
+    return () => { cancelled = true }
   }, [token, loadMore])
 
   // Keep ref in sync so loadMorePlaylistTracks always sees current playlists.

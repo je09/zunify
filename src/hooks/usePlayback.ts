@@ -21,10 +21,13 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Track, albumQueue, ALBUMS } from '../data'
 import type { SpotifyEngine } from '../useSpotifyPlayer'
 
+export interface UpNextTrack { title: string; artist: string; imageUrl?: string }
+
 export interface PlaybackState {
   queue: Track[]
   idx: number
   track: Track
+  upNext: UpNextTrack[]   // 2 upcoming tracks — from SDK state or local queue
   playing: boolean
   time: number
   fav: boolean
@@ -296,14 +299,13 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const play = useCallback((q: Track[], i: number) => {
     if (q.length === 0) return
     const t = q[i]
-    const isSDK = Boolean(spotifyRef.current && t?.spotifyUri)
 
-    // For SDK engine, Spotify handles shuffle server-side — send original URIs
-    // and re-apply shuffle state after start. For non-SDK, pre-shuffle locally
-    // so "Up Next" is accurate and traversal is linear with no repeats.
+    // Pre-shuffle for both SDK and non-SDK: Spotify's uris[] endpoint plays tracks
+    // in exact order provided (shuffle state only affects context_uri playback).
+    // So sending shuffled URIs gives us accurate "Up Next" and no repeats.
     let activeQueue = q
     let activeIdx   = i
-    if (!isSDK && shuffleRef.current) {
+    if (shuffleRef.current) {
       const rest = q.filter((_, ri) => ri !== i)
       for (let j = rest.length - 1; j > 0; j--) {
         const k = Math.floor(Math.random() * (j + 1))
@@ -313,7 +315,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
       activeQueue = [t, ...rest]
       activeIdx   = 0
     } else {
-      originalQueueRef.current = isSDK && shuffleRef.current ? q : []
+      originalQueueRef.current = []
     }
 
     setQueue(activeQueue)
@@ -322,10 +324,9 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     setPlaying(true)
     setStarted(true)
 
-    if (isSDK && spotifyRef.current) {
-      const sp      = spotifyRef.current
-      const allUris = q.flatMap(t => t.spotifyUri ? [t.spotifyUri] : [])
-      const offsetInAll = q.slice(0, i).filter(t => t.spotifyUri).length
+    if (spotifyRef.current && t?.spotifyUri) {
+      const allUris     = activeQueue.flatMap(t => t.spotifyUri ? [t.spotifyUri] : [])
+      const offsetInAll = activeQueue.slice(0, activeIdx).filter(t => t.spotifyUri).length
       // Spotify rejects bodies over ~1 MB (413). Cap at 300 URIs, starting
       // from the selected track and wrapping, so the full queue is reachable
       // via next/prev within Spotify's context.
@@ -334,11 +335,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
         ...allUris.slice(offsetInAll),
         ...allUris.slice(0, offsetInAll),
       ].slice(0, MAX)
-      // Re-apply shuffle after start — starting playback with uris resets
-      // Spotify's shuffle state to off regardless of what it was before.
-      void sp.startPlayback(windowUris, 0).then(() => {
-        if (shuffleRef.current) void sp.setShuffle(true)
-      })
+      void spotifyRef.current.startPlayback(windowUris, 0)
     } else if (t?.previewUrl) {
       // Call play() synchronously in the user-gesture call stack.
       // iOS blocks audio.play() once we cross an async boundary (useEffect
@@ -404,12 +401,6 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const toggleShuffle = useCallback(() => {
     setShuffle(prev => {
       const next = !prev
-
-      // For SDK engine Spotify controls actual playback order server-side —
-      // setShuffle makes Spotify reshuffle its own queue. Our local manipulation
-      // below only drives the "Up Next" display.
-      void spotifyRef.current?.setShuffle(next)
-
       if (next) {
         // Save original order, build shuffled queue with current track pinned first.
         // Traversal stays linear so every track plays exactly once before repeating.
@@ -442,8 +433,22 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   prevCbRef.current = prev
   seekCbRef.current = seek
 
+  // Up Next: prefer Spotify's own queue (accurate even when Spotify shuffles
+  // server-side) over our local queue which may be stale after toggle.
+  const sdkNextTracks = spotify?.sdkState?.track_window?.next_tracks
+  const upNext: UpNextTrack[] = sdkNextTracks && engine === 'sdk'
+    ? sdkNextTracks.slice(0, 2).map(t => ({
+        title:    t.name,
+        artist:   t.artists[0]?.name ?? '',
+        imageUrl: t.album.images[0]?.url,
+      }))
+    : Array.from({ length: Math.min(2, queue.length - 1) }, (_, i) => {
+        const t = queue[(idx + i + 1) % queue.length]
+        return { title: t.title, artist: t.artist, imageUrl: t.imageUrl }
+      })
+
   return {
-    queue, idx, track, playing, time, fav, shuffle, repeat, started,
+    queue, idx, track, upNext, playing, time, fav, shuffle, repeat, started,
     play, toggle, next, prev, seek,
     toggleFav, toggleShuffle, cycleRepeat,
   }

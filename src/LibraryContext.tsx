@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback, Re
 import { Album, Playlist, SongEntry, Track, buildArtists, buildSongs, artistIdByName as buildArtistIdMap } from './data'
 import {
   fetchSavedAlbumsPage, fetchUserPlaylistsPage, fetchLikedTracksPage,
-  fetchPlaylistTracksPage, fetchCurrentUser,
+  fetchPlaylistTracksPage, fetchCurrentUser, fetchFollowedArtists, SpotifyArtist,
 } from './spotifyApi'
 
 export type LibraryPageKind = 'albums' | 'playlists' | 'tracks'
@@ -65,6 +65,7 @@ function buildLibrary(
   playlists: Playlist[],
   totals: LibraryTotals,
   userId: string | null,
+  followedArtists: SpotifyArtist[] = [],
 ): Library {
   const likedPlaylist = playlists.find(pl => pl.id === 'sp_liked')
   const liked = likedPlaylist?.tracks ?? []
@@ -72,9 +73,20 @@ function buildLibrary(
 
   const songsAlbums = mergeAlbums(albums, albumsFromLiked(liked))
 
+  // Merge album artists + followed artists, deduplicated, sorted
+  const idMap = buildArtistIdMap(albums)
+  followedArtists.forEach(a => { if (!idMap.has(a.name)) idMap.set(a.name, a.id) })
+
+  const allArtistNames = [...new Set([
+    ...buildArtists(albums),
+    ...followedArtists.map(a => a.name),
+  ])].sort((x, y) =>
+    x.replace(/^the\s+/i, '').localeCompare(y.replace(/^the\s+/i, ''), 'en', { sensitivity: 'base' })
+  )
+
   return {
-    albums, artists: buildArtists(albums), songs: buildSongs(songsAlbums),
-    playlists, likedTrackUris, artistIdByName: buildArtistIdMap(albums),
+    albums, artists: allArtistNames, songs: buildSongs(songsAlbums),
+    playlists, likedTrackUris, artistIdByName: idMap,
     userId, loading: false,
     loadingMore: { albums: false, playlists: false, tracks: false, playlistTracks: {} },
     error: null, totals,
@@ -145,6 +157,7 @@ export function LibraryProvider({ token, children }: Props) {
   const loadingPlaylistTracksRef = useRef<Record<string, boolean>>({})
   const playlistsRef = useRef(lib.playlists)
   const userIdRef = useRef<string | null>(null)
+  const followedArtistsRef = useRef<SpotifyArtist[]>([])
 
   const loadMore = useCallback((kind: LibraryPageKind) => {
     if (!tokenRef.current) return
@@ -160,7 +173,7 @@ export function LibraryProvider({ token, children }: Props) {
           setLib(prev => {
             const albums = mergeAlbums(prev.albums, page.items)
             const totals = { ...prev.totals, albums: page.total ?? prev.totals.albums }
-            return buildLibrary(albums, prev.playlists, totals, userIdRef.current)
+            return buildLibrary(albums, prev.playlists, totals, userIdRef.current, followedArtistsRef.current)
           })
         })
         .catch((err: unknown) => setLib(prev => ({ ...prev, error: String(err) })))
@@ -191,7 +204,7 @@ export function LibraryProvider({ token, children }: Props) {
             }
             const playlists = [nextLiked, ...userPlaylists]
             const totals = { ...prev.totals, songs: page.total ?? prev.totals.songs }
-            return buildLibrary(prev.albums, playlists, totals, userIdRef.current)
+            return buildLibrary(prev.albums, playlists, totals, userIdRef.current, followedArtistsRef.current)
           })
         })
         .catch((err: unknown) => setLib(prev => ({ ...prev, error: String(err) })))
@@ -224,7 +237,7 @@ export function LibraryProvider({ token, children }: Props) {
           }
           const playlists = [nextLiked, ...mergePlaylists(userPlaylists, playlistPage.items)]
           const totals = { ...prev.totals, songs: likedPage?.total ?? prev.totals.songs, playlists: playlistPage.total ?? prev.totals.playlists }
-          return buildLibrary(prev.albums, playlists, totals, userIdRef.current)
+          return buildLibrary(prev.albums, playlists, totals, userIdRef.current, followedArtistsRef.current)
         })
       })
       .catch((err: unknown) => setLib(prev => ({ ...prev, error: String(err) })))
@@ -256,7 +269,7 @@ export function LibraryProvider({ token, children }: Props) {
             totalTracks: page.total ?? pl.totalTracks,
             trackNextUrl: page.next,
           })
-          return buildLibrary(prev.albums, playlists, prev.totals, userIdRef.current)
+          return buildLibrary(prev.albums, playlists, prev.totals, userIdRef.current, followedArtistsRef.current)
         })
       })
       .catch((err: unknown) => setLib(prev => ({ ...prev, error: String(err) })))
@@ -275,6 +288,7 @@ export function LibraryProvider({ token, children }: Props) {
       nextTracksRef.current = undefined
       likedLoadedRef.current = false
       userIdRef.current = null
+      followedArtistsRef.current = []
       setLib(EMPTY)
       return
     }
@@ -283,15 +297,17 @@ export function LibraryProvider({ token, children }: Props) {
 
     setLib(prev => ({ ...prev, loading: true }))
 
-    // Parallel initial fetch: user + albums (page 1) + playlists (page 1) + liked count
+    // Parallel initial fetch: user + albums + playlists + liked count + followed artists
     Promise.all([
       fetchCurrentUser(),
       fetchSavedAlbumsPage(),
       fetchUserPlaylistsPage(),
       fetchLikedTracksPage('/me/tracks?limit=1'),
-    ]).then(([user, albumPage, playlistPage, likedPage]) => {
+      fetchFollowedArtists(50).catch(() => [] as SpotifyArtist[]),
+    ]).then(([user, albumPage, playlistPage, likedPage, followed]) => {
       if (cancelled) return
       userIdRef.current = user.id
+      followedArtistsRef.current = followed
       nextAlbumsRef.current = albumPage.next
       nextPlaylistsRef.current = playlistPage.next
       nextTracksRef.current = '/me/tracks?limit=50'
@@ -304,7 +320,7 @@ export function LibraryProvider({ token, children }: Props) {
         songs: likedPage.total,
         playlists: playlistPage.total,
       }
-      setLib(buildLibrary(albumPage.items, playlists, totals, user.id))
+      setLib(buildLibrary(albumPage.items, playlists, totals, user.id, followed))
     }).catch((err: unknown) => {
       if (!cancelled) setLib(prev => ({ ...prev, loading: false, error: String(err) }))
     })

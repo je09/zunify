@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Track, Album, albumQueue, fmt } from '../data'
 import {
   fetchAlbum as fetchFullAlbum, checkSavedTracks, saveTracks, removeTracks,
-  checkFollowingArtists, followArtists, unfollowArtists, fetchArtistAlbums,
+  fetchArtistAlbums,
 } from '../spotifyApi'
 import { Pivot, PivotArea, Thumb, useSwipe, BottomBack } from '../components/Pivot'
 import { Icons } from '../components/icons'
@@ -20,7 +20,6 @@ interface Props {
 export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist, onPlay, onBack }: Props) {
   const [fullAlbum, setFullAlbum] = useState<Album>(album)
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
-  const [artistFollowing, setArtistFollowing] = useState(false)
   const [otherAlbums, setOtherAlbums] = useState<Album[]>([])
   const [loadingEnrich, setLoadingEnrich] = useState(false)
 
@@ -30,7 +29,6 @@ export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist
     // Reset when album changes
     setFullAlbum(album)
     setSavedIds(new Set())
-    setArtistFollowing(false)
     setOtherAlbums([])
     if (!album.id || album.id.length < 5) return
 
@@ -39,18 +37,16 @@ export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist
 
     const needFullFetch = album.tracks.length === 0
 
-    // Wave 1: full album (if needed) + following state + other albums
+    // Wave 1: full album (if needed) + other albums by artist
     Promise.all([
       needFullFetch ? fetchFullAlbum(album.id) : Promise.resolve(null),
-      album.artistId ? checkFollowingArtists([album.artistId]) : Promise.resolve([false]),
       album.artistId
         ? fetchArtistAlbums(album.artistId, { limit: 10 })
         : Promise.resolve({ items: [] as Album[], next: null, total: null }),
-    ]).then(async ([fetched, [following], albumsPage]) => {
+    ]).then(async ([fetched, albumsPage]) => {
       if (cancelled) return
       const resolved = fetched ?? album
       if (fetched) setFullAlbum(fetched)
-      setArtistFollowing(!!following)
       setOtherAlbums(albumsPage.items.filter(a => a.id !== resolved.id).slice(0, 6))
 
       // Wave 2: check saved state for tracks
@@ -81,14 +77,6 @@ export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist
     setSavedIds(next)
   }
 
-  const toggleFollowArtist = () => {
-    if (!album.artistId) return
-    const next = !artistFollowing
-    setArtistFollowing(next)
-    const op = next ? followArtists([album.artistId]) : unfollowArtists([album.artistId])
-    op.catch(() => setArtistFollowing(!next))
-  }
-
   const swipe = useSwipe(
     () => tab === 0 ? onBack() : onTabChange(0),
     () => onTabChange(1),
@@ -112,23 +100,12 @@ export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist
               >
                 {fullAlbum.artist}
               </div>
-              <div style={{ display: 'flex', gap: 10, marginTop: 8, alignItems: 'center' }}>
-                <button className="al-playall" onClick={() => onPlay(queue, 0, contextUri)}>
-                  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-                    <path d="M7 5.5v13L19 12z" fill="currentColor" />
-                  </svg>
-                  <span>play</span>
-                </button>
-                {album.artistId && (
-                  <button
-                    className={'artist-follow-btn' + (artistFollowing ? ' following' : '')}
-                    style={{ fontSize: 13, padding: '5px 12px' }}
-                    onClick={toggleFollowArtist}
-                  >
-                    {artistFollowing ? 'following' : 'follow'}
-                  </button>
-                )}
-              </div>
+              <button className="al-playall" style={{ marginTop: 8 }} onClick={() => onPlay(queue, 0, contextUri)}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                  <path d="M7 5.5v13L19 12z" fill="currentColor" />
+                </svg>
+                <span>play</span>
+              </button>
             </div>
           </div>
 

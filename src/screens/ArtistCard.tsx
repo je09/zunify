@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Track, Album, fmt } from '../data'
-import { SpotifyArtist, fetchArtist, checkFollowingArtists, followArtists, unfollowArtists, fetchArtistTopTracks, fetchArtistAlbums, checkSavedTracks } from '../spotifyApi'
+import { SpotifyArtist, fetchArtist, fetchArtistTopTracks, fetchArtistAlbums, checkSavedTracks } from '../spotifyApi'
 import { Pivot, PivotArea, Thumb, useSwipe, BottomBack } from '../components/Pivot'
 import { Icons } from '../components/icons'
 
@@ -20,14 +20,13 @@ interface ArtistState {
   albums: Album[]
   singles: Album[]
   savedTrackIds: Set<string>
-  following: boolean
   loading: boolean
 }
 
 export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPlay, onBack }: Props) {
   const [state, setState] = useState<ArtistState>({
     artist: null, topTracks: [], albums: [], singles: [],
-    savedTrackIds: new Set(), following: false, loading: Boolean(artistId),
+    savedTrackIds: new Set(), loading: Boolean(artistId),
   })
 
   useEffect(() => {
@@ -36,14 +35,13 @@ export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPl
 
     setState(prev => ({ ...prev, loading: true }))
 
-    // Wave 1: artist info + following + top tracks + albums + singles in parallel
+    // Wave 1: artist info + top tracks + albums + singles in parallel
     Promise.all([
       fetchArtist(artistId),
-      checkFollowingArtists([artistId]),
       fetchArtistTopTracks(artistId),
       fetchArtistAlbums(artistId, { limit: 10, include_groups: 'album' }),
       fetchArtistAlbums(artistId, { limit: 10, include_groups: 'single' }),
-    ]).then(async ([artist, [following], topTracks, albumsPage, singlesPage]) => {
+    ]).then(async ([artist, topTracks, albumsPage, singlesPage]) => {
       if (cancelled) return
 
       // Wave 2: check saved state for top tracks
@@ -53,7 +51,7 @@ export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPl
 
       if (cancelled) return
       setState({
-        artist, following: !!following, topTracks,
+        artist, topTracks,
         albums: albumsPage.items, singles: singlesPage.items,
         savedTrackIds, loading: false,
       })
@@ -64,7 +62,7 @@ export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPl
     return () => { cancelled = true }
   }, [artistId])
 
-  const { artist, topTracks, albums, singles, savedTrackIds, following, loading } = state
+  const { artist, topTracks, albums, singles, savedTrackIds, loading } = state
 
   const bgImage = artist?.images?.[0]?.url
   const displayName = artist?.name ?? name
@@ -75,15 +73,7 @@ export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPl
     () => onTabChange(1),
   )
 
-  const toggleFollow = () => {
-    if (!artistId) return
-    const next = !following
-    setState(prev => ({ ...prev, following: next }))
-    const op = next ? followArtists([artistId]) : unfollowArtists([artistId])
-    op.catch(() => setState(prev => ({ ...prev, following: !next })))
-  }
-
-  return (
+return (
     <div className="page artist-card">
       <div
         className="card-bg"
@@ -95,25 +85,8 @@ export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPl
       <div className="card-scrim" />
       <div className="card-body">
         <div className="artist-heading">{displayName}</div>
-        {artist && (
-          <div className="artist-meta">
-            {artist.followers.total > 0 && (
-              <span className="artist-followers">{artist.followers.total.toLocaleString()} followers</span>
-            )}
-            {artist.genres.length > 0 && (
-              <span className="artist-genres">{artist.genres.slice(0, 2).join(', ')}</span>
-            )}
-          </div>
-        )}
-        <div className="artist-actions">
-          <button
-            className={'artist-follow-btn' + (following ? ' following' : '')}
-            onClick={toggleFollow}
-            aria-label={following ? 'Unfollow' : 'Follow'}
-          >
-            {following ? 'following' : 'follow'}
-          </button>
-          {contextUri && (
+        {contextUri && topTracks.length > 0 && (
+          <div className="artist-actions">
             <button
               className="al-playall"
               onClick={() => onPlay(topTracks, 0, contextUri)}
@@ -124,8 +97,8 @@ export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPl
               </svg>
               <span>play</span>
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         <Pivot tabs={['albums', 'songs']} active={tab} onChange={onTabChange} />
         <PivotArea tab={tab} ref={swipe}>

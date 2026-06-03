@@ -8,7 +8,8 @@ import {
   clearTokens, hasStoredTokens,
 } from './spotifyAuth'
 import { getClientId, setClientId, getRedirectUri } from './spotifyConfig'
-import { Album, Playlist, albumQueue, Track } from './data'
+import { Album, Playlist, Track } from './data'
+import { setShuffleState } from './spotifyApi'
 import { Hub } from './screens/Hub'
 import { Collection } from './screens/Collection'
 import { ArtistCard } from './screens/ArtistCard'
@@ -73,7 +74,7 @@ function AppContent({ token, onLogout }: ContentProps) {
   const spotifyEngine = useSpotifyPlayer(Boolean(token), onLogout, setSdkError)
   const pb            = usePlayback(spotifyEngine)
   const theme         = useTheme()
-  const { albums }    = useLibrary()
+  const { playlists, userId } = useLibrary()
 
   const [navStack, setNavStack] = useState<NavFrame[]>([{ screen: 'home' }])
   const [navKey, setNavKey]     = useState(0)
@@ -92,7 +93,7 @@ function AppContent({ token, onLogout }: ContentProps) {
     setNavStack(s => s.map((f, i) => i === s.length - 1 ? { ...f, tab } as NavFrame : f))
 
   const playAndGo = (queue: Track[], idx: number, contextUri?: string) => {
-    if (queue.length === 0) return
+    if (queue.length === 0 && !contextUri) return
     pb.play(queue, idx, contextUri)
     push({ screen: 'nowplaying' })
   }
@@ -107,8 +108,17 @@ function AppContent({ token, onLogout }: ContentProps) {
           onOpenCollection={(tab) => push({ screen: 'collection', tab })}
           onOpenNowPlaying={() => push({ screen: 'nowplaying' })}
           onOpenAlbum={(album) => push({ screen: 'album', album, tab: 0 })}
-          onOpenPlaylist={(playlist) => push({ screen: 'playlist', playlist })}
-          onShuffle={() => playAndGo(albums.flatMap(albumQueue).sort(() => Math.random() - 0.5), 0)}
+          onShuffle={() => {
+            const liked = playlists.find(p => p.id === 'sp_liked')?.tracks ?? []
+            void setShuffleState(true).catch(() => {})
+            if (liked.length) {
+              const shuffled = [...liked].sort(() => Math.random() - 0.5)
+              playAndGo(shuffled, 0)
+            } else if (userId) {
+              // Liked tracks not yet loaded — play Spotify collection context with shuffle
+              playAndGo([], 0, `spotify:user:${userId}:collection`)
+            }
+          }}
           onSettings={() => setShowSettings(true)}
         />
       )

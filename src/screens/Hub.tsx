@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { Album, Playlist, Track } from '../data'
+import { Album, Track } from '../data'
 import { Icons } from '../components/icons'
 import { PlaybackState } from '../hooks/usePlayback'
 import { NowPlayingPane } from '../components/NowPlayingPane'
-import { fetchNewReleases, fetchFeaturedPlaylists, getRecentlyPlayed } from '../spotifyApi'
+import { fetchNewReleases, getRecentlyPlayed } from '../spotifyApi'
 
 const MENU: [string, number][] = [
   ['artists', 0], ['albums', 1], ['songs', 2], ['playlists', 3],
@@ -14,33 +14,30 @@ interface Props {
   onOpenCollection: (tab: number) => void
   onOpenNowPlaying: () => void
   onOpenAlbum: (album: Album) => void
-  onOpenPlaylist: (pl: Playlist) => void
   onShuffle: () => void
   onSettings: () => void
 }
 
 interface HomeState {
   newReleases: Album[]
-  featured: Playlist[]
   recentTracks: Track[]
   loaded: boolean
 }
 
-export function Hub({ pb, onOpenCollection, onOpenNowPlaying, onOpenAlbum, onOpenPlaylist, onShuffle, onSettings }: Props) {
+export function Hub({ pb, onOpenCollection, onOpenNowPlaying, onOpenAlbum, onShuffle, onSettings }: Props) {
   const stripRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLDivElement>(null)
 
-  const [home, setHome] = useState<HomeState>({ newReleases: [], featured: [], recentTracks: [], loaded: false })
+  const [home, setHome] = useState<HomeState>({ newReleases: [], recentTracks: [], loaded: false })
 
   useEffect(() => {
     let cancelled = false
     Promise.all([
       fetchNewReleases(8),
-      fetchFeaturedPlaylists(6),
       getRecentlyPlayed({ limit: 20 }),
-    ]).then(([newReleases, featured, recentPage]) => {
+    ]).then(([newReleases, recentPage]) => {
       if (cancelled) return
-      setHome({ newReleases, featured, recentTracks: recentPage.items.map(h => h.track as Track), loaded: true })
+      setHome({ newReleases, recentTracks: recentPage.items.map(h => h.track as Track), loaded: true })
     }).catch(() => {
       if (!cancelled) setHome(prev => ({ ...prev, loaded: true }))
     })
@@ -100,7 +97,7 @@ export function Hub({ pb, onOpenCollection, onOpenNowPlaying, onOpenAlbum, onOpe
             <div className="hub-menu">
               {home.recentTracks.slice(0, 8).map((t, i) => (
                 <button
-                  key={t.spotifyUri ?? i}
+                  key={i}
                   className="hub-item"
                   style={{ fontSize: 22 }}
                   onClick={() => pb.play([t], 0)}
@@ -112,22 +109,6 @@ export function Hub({ pb, onOpenCollection, onOpenNowPlaying, onOpenAlbum, onOpe
           </div>
         )}
 
-        {home.featured.length > 0 && (
-          <div className="pane">
-            <div className="pane-head">featured</div>
-            <div className="hub-grid">
-              {home.featured.map(pl => (
-                <div key={pl.id} className="hub-card" onClick={() => onOpenPlaylist(pl)}>
-                  <div className="hub-card-art">
-                    {pl.imageUrl ? <img src={pl.imageUrl} alt="" /> : <div style={{ background: '#333', width: '100%', height: '100%' }} />}
-                  </div>
-                  <div className="hub-card-name">{pl.name}</div>
-                  <div className="hub-card-sub">{pl.totalTracks ?? ''} songs</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="appbar">

@@ -13,6 +13,7 @@ export interface SpotifyEngine {
   deviceId: string
   sdkState: Spotify.PlaybackState | null
   startPlayback: (uris: string[], offsetIndex: number) => Promise<void>
+  startPlaybackContext: (contextUri: string, offsetPosition: number) => Promise<void>
   setShuffle: (state: boolean) => Promise<void>
 }
 
@@ -73,31 +74,32 @@ export function useSpotifyPlayer(
       player.addListener('ready', ({ device_id }) => {
         if (!live) return
 
-        const startPlayback = async (uris: string[], offsetIndex: number): Promise<void> => {
-          const token = await getValidToken()
-          if (!token || uris.length === 0) return
-
-          const body = JSON.stringify({ uris, offset: { position: Math.max(0, offsetIndex) } })
+        const putPlay = async (token: string, body: string): Promise<void> => {
           const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-
           const res = await fetch(
             `https://api.spotify.com/v1/me/player/play?device_id=${device_id}`,
             { method: 'PUT', headers, body }
           )
-
           if (res.status === 404) {
-            // Device not yet active — transfer playback to it first, then retry.
             await fetch('https://api.spotify.com/v1/me/player', {
-              method: 'PUT',
-              headers,
+              method: 'PUT', headers,
               body: JSON.stringify({ device_ids: [device_id] }),
             })
             await new Promise(r => setTimeout(r, 400))
-            await fetch(
-              `https://api.spotify.com/v1/me/player/play?device_id=${device_id}`,
-              { method: 'PUT', headers, body }
-            )
+            await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${device_id}`, { method: 'PUT', headers, body })
           }
+        }
+
+        const startPlayback = async (uris: string[], offsetIndex: number): Promise<void> => {
+          const token = await getValidToken()
+          if (!token || uris.length === 0) return
+          await putPlay(token, JSON.stringify({ uris, offset: { position: Math.max(0, offsetIndex) } }))
+        }
+
+        const startPlaybackContext = async (contextUri: string, offsetPosition: number): Promise<void> => {
+          const token = await getValidToken()
+          if (!token || !contextUri) return
+          await putPlay(token, JSON.stringify({ context_uri: contextUri, offset: { position: Math.max(0, offsetPosition) } }))
         }
 
         const setShuffle = async (state: boolean): Promise<void> => {
@@ -114,6 +116,7 @@ export function useSpotifyPlayer(
           deviceId: device_id,
           sdkState: prev?.sdkState ?? null,
           startPlayback,
+          startPlaybackContext,
           setShuffle,
         }))
       })

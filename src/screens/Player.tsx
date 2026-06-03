@@ -11,12 +11,13 @@ interface Props {
 
 export function Player({ pb, onBack }: Props) {
   const { track, upNext, playing, time, fav, shuffle, repeat,
+          prevDisabled, nextDisabled,
           toggle, next, prev, seek, toggleFav, toggleShuffle, cycleRepeat } = pb
   const { likedTrackUris } = useLibrary()
 
   if (!track) return null
 
-  const pct = Math.min(100, (time / track.dur) * 100)
+  const pct = track.dur > 0 ? Math.min(100, (time / track.dur) * 100) : 0
   const repeatState = repeat === 0 ? 'outline' : 'on'
   const isLiked = fav || Boolean(track.spotifyUri && likedTrackUris.has(track.spotifyUri))
   const swipe = useSwipe(onBack, () => {})
@@ -24,7 +25,6 @@ export function Player({ pb, onBack }: Props) {
   return (
     <div className="np" ref={swipe}>
 
-      {/* scrollable body — pushes transport to bottom */}
       <div className="np-body">
         <div className="meta swap" key={'m' + track.title}>
           <div className="np-artist">{track.artist}</div>
@@ -51,7 +51,7 @@ export function Player({ pb, onBack }: Props) {
         <ProgressBar pct={pct} onSeek={seek} />
         <div className="times">
           <span className="elapsed">{fmt(time)}</span>
-          <span className="remain">-{fmt(track.dur - time)}</span>
+          <span className="remain">{track.dur > 0 ? `-${fmt(track.dur - time)}` : ''}</span>
         </div>
 
         <div className="np-track swap" key={'t' + track.title}>
@@ -64,13 +64,26 @@ export function Player({ pb, onBack }: Props) {
         </div>
       </div>
 
-      {/* transport pinned to bottom above app bar */}
       <div className="transport">
-        <button className="tbtn" onClick={prev} aria-label="Previous">{Icons.prev}</button>
+        <button
+          className={'tbtn' + (prevDisabled ? ' tbtn-disabled' : '')}
+          onClick={prevDisabled ? undefined : prev}
+          aria-label="Previous"
+          aria-disabled={prevDisabled}
+        >
+          {Icons.prev}
+        </button>
         <button className="tbtn mid" onClick={toggle} aria-label={playing ? 'Pause' : 'Play'}>
           {playing ? Icons.pause : Icons.play}
         </button>
-        <button className="tbtn" onClick={next} aria-label="Next">{Icons.next}</button>
+        <button
+          className={'tbtn' + (nextDisabled ? ' tbtn-disabled' : '')}
+          onClick={nextDisabled ? undefined : next}
+          aria-label="Next"
+          aria-disabled={nextDisabled}
+        >
+          {Icons.next}
+        </button>
       </div>
 
       <div className="appbar">

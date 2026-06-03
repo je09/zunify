@@ -10,7 +10,7 @@ interface Props {
 
 export function NowPlayingPane({ pb, onOpen }: Props) {
   const { track, playing, time, shuffle, repeat, toggle, next, prev, seek, toggleShuffle, cycleRepeat } = pb
-  const pct = Math.min(100, (time / track.dur) * 100)
+  const pct = track.dur > 0 ? Math.min(100, (time / track.dur) * 100) : 0
 
   return (
     <div className="nowpane">

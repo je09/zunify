@@ -334,6 +334,28 @@ body {
 }
 .hub-item:active { opacity: .55; }
 
+/* ── Hub content grids ───────────────────────────────────────────────────── */
+.hub-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 18px; }
+.hub-card { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.hub-card-art { width: 100%; aspect-ratio: 1; background: #222; overflow: hidden; }
+.hub-card-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hub-card-name { font-size: 17px; font-weight: 300; margin-top: 6px; line-height: 1.2; }
+.hub-card-sub  { font-size: 13px; color: var(--dim); margin-top: 2px; }
+
+/* ── Artist page extras ──────────────────────────────────────────────────── */
+.artist-meta { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; margin-bottom: 12px; }
+.artist-followers { font-size: 15px; font-weight: 300; color: var(--dim); }
+.artist-genres    { font-size: 14px; font-weight: 300; color: var(--dim); }
+.artist-actions   { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.artist-follow-btn {
+  background: none; border: 1px solid var(--fg); color: var(--fg);
+  font: inherit; font-size: 14px; font-weight: 600; padding: 6px 18px;
+  cursor: pointer; letter-spacing: .5px; text-transform: lowercase;
+  -webkit-tap-highlight-color: transparent; transition: opacity .12s;
+}
+.artist-follow-btn.following { border-color: var(--accent); color: var(--accent); }
+.artist-follow-btn:active { opacity: .6; }
+
 /* ── Now-playing pane (hub) ──────────────────────────────────────────────── */
 .nowpane .pane-head    { margin-bottom: 20px; }
 .nowpane .art          { cursor: pointer; }
@@ -503,6 +525,28 @@ body {
 .iconbtn.on svg path, .iconbtn.on svg polygon { fill: var(--accent); stroke: var(--accent); }
 
 .np .progress { margin-top: 26px; }
+
+/* ── Volume row ──────────────────────────────────────────────────────────── */
+.volume-row {
+  display: flex; align-items: center; gap: 10px; margin-top: 16px;
+}
+.volume-row .iconbtn { width: 32px; height: 32px; flex-shrink: 0; }
+.volume-row .iconbtn svg { width: 22px; height: 22px; }
+.volume-slider {
+  flex: 1; height: 4px; cursor: pointer; outline: none; border: none;
+  -webkit-appearance: none; appearance: none;
+  background: var(--line); border-radius: 2px;
+  accent-color: var(--accent);
+}
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px; border-radius: 50%; background: var(--fg); cursor: pointer;
+}
+.volume-slider::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%; background: var(--fg); border: none; cursor: pointer;
+}
+
+.tbtn-disabled { opacity: .35; cursor: default; }
 
 .np-track      { margin-top: 18px; }
 .np-track .title { font-size: 30px; font-weight: 300; letter-spacing: -.2px; }

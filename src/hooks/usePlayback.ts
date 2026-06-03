@@ -37,6 +37,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const [localRepeat, setLocalRepeat]   = useState<0 | 1 | 2>(0)
   const [started, setStarted]           = useState(false)
   const [fav, setFav]                   = useState(false)
+  const [sdkTime, setSdkTime]           = useState(0)
 
   const audioRef   = useRef<HTMLAudioElement>(new Audio())
   const rafRef     = useRef(0)
@@ -52,6 +53,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const favRef          = useRef(false)
   const gestureDidPlayRef = useRef(false)
   const startupSyncRef = useRef(false)
+  const sdkBaseRef     = useRef<{ position: number; timestamp: number }>({ position: 0, timestamp: 0 })
 
   localRepeatRef.current  = localRepeat
   localShuffleRef.current = localShuffle
@@ -70,7 +72,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const track: Track = getSdkTrack(spotify) ?? localQueue[localIdx] ?? NULL_TRACK
 
   const playing = sdkLive ? !s!.paused : localPlaying
-  const time    = sdkLive ? s!.position / 1000 : localTime
+  const time    = sdkLive ? sdkTime : localTime
   const shuffle = sdkLive ? s!.shuffle : localShuffle
   const repeat  = sdkLive ? getSdkRepeatMode(spotify) : localRepeat
 
@@ -86,7 +88,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
 
   // ── Startup: mirror active Spotify Connect playback without transfer ──────
   useEffect(() => {
-    if (!spotify || startupSyncRef.current) return
+    if (startupSyncRef.current) return
     startupSyncRef.current = true
     let live = true
 
@@ -110,7 +112,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
       .catch(() => {})
 
     return () => { live = false }
-  }, [spotify])
+  }, [])
 
   // ── SDK: check liked state when current track changes ─────────────────────
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -120,6 +122,23 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     if (!id) return
     checkSavedTracks([id]).then(([liked]) => setFav(!!liked)).catch(() => {})
   }, [sdkCurrent?.id])
+
+  // ── SDK: sync time base on each state event ──────────────────────────────
+  useEffect(() => {
+    if (!sdkLive || !s) return
+    sdkBaseRef.current = { position: s.position, timestamp: Date.now() }
+    setSdkTime(s.position / 1000)
+  }, [s]) // s reference changes on every player_state_changed
+
+  // ── SDK: advance time locally while playing ───────────────────────────────
+  useEffect(() => {
+    if (!sdkLive || !s || s.paused) return
+    const id = setInterval(() => {
+      const b = sdkBaseRef.current
+      setSdkTime((b.position + (Date.now() - b.timestamp)) / 1000)
+    }, 500)
+    return () => clearInterval(id)
+  }, [sdkLive, s?.paused])
 
   // ── Local audio: attach listeners once ────────────────────────────────────
   useEffect(() => {

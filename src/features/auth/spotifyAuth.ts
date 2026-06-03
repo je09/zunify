@@ -1,4 +1,4 @@
-import { getClientId, getRedirectUri } from './spotifyConfig'
+import { getClientId, getRedirectUri } from '../../spotifyConfig'
 
 export const SPOTIFY_SCOPES = [
   'streaming',
@@ -25,6 +25,7 @@ export const SPOTIFY_SCOPES = [
 ].join(' ')
 
 const TOKEN_KEY = 'sp_tokens'
+const STATE_KEY = 'sp_state'
 
 interface Tokens { access: string; refresh: string; expiresAt: number }
 
@@ -84,7 +85,9 @@ export async function startLogin(): Promise<void> {
   if (!clientId) throw new Error('Spotify Client ID not set')
 
   const verifier = b64url(crypto.getRandomValues(new Uint8Array(64)))
+  const state = b64url(crypto.getRandomValues(new Uint8Array(32)))
   localStorage.setItem('sp_verifier', verifier)
+  localStorage.setItem(STATE_KEY, state)
   const challenge = b64url(sha256(new TextEncoder().encode(verifier)))
 
   const url = new URL('https://accounts.spotify.com/authorize')
@@ -94,16 +97,21 @@ export async function startLogin(): Promise<void> {
   url.searchParams.set('scope', SPOTIFY_SCOPES)
   url.searchParams.set('code_challenge_method', 'S256')
   url.searchParams.set('code_challenge', challenge)
+  url.searchParams.set('state', state)
   window.location.href = url.toString()
 }
 
 export async function handleCallback(): Promise<boolean> {
-  const code = new URLSearchParams(window.location.search).get('code')
+  const params = new URLSearchParams(window.location.search)
+  const code = params.get('code')
+  const state = params.get('state')
   const verifier = localStorage.getItem('sp_verifier')
-  if (!code || !verifier) return false
+  const expectedState = localStorage.getItem(STATE_KEY)
+  if (!code || !verifier || !state || state !== expectedState) return false
 
   window.history.replaceState({}, '', window.location.pathname)
   localStorage.removeItem('sp_verifier')
+  localStorage.removeItem(STATE_KEY)
 
   const res = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',

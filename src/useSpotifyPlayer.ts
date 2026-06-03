@@ -4,7 +4,7 @@
 // touches the SDK directly.
 
 import { useState, useEffect, useRef } from 'react'
-import { getValidToken } from './spotifyAuth'
+import { getValidToken } from './features/auth/spotifyAuth'
 
 // ── Engine abstraction ────────────────────────────────────────────────────────
 

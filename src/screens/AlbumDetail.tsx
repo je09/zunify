@@ -1,11 +1,7 @@
-import { useState, useEffect } from 'react'
-import { Track, Album, albumQueue, fmt } from '../data'
-import {
-  fetchAlbum as fetchFullAlbum, checkSavedTracks, saveTracks, removeTracks,
-  fetchArtistAlbums,
-} from '../spotifyApi'
+import { Track, Album, fmt } from '../data'
 import { Pivot, PivotArea, Thumb, useSwipe, BottomBack } from '../components/Pivot'
 import { Icons } from '../components/icons'
+import { useAlbumDetail } from './useAlbumDetail'
 
 interface Props {
   album: Album
@@ -18,64 +14,7 @@ interface Props {
 }
 
 export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist, onPlay, onBack }: Props) {
-  const [fullAlbum, setFullAlbum] = useState<Album>(album)
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
-  const [otherAlbums, setOtherAlbums] = useState<Album[]>([])
-  const [loadingEnrich, setLoadingEnrich] = useState(false)
-
-  const contextUri = fullAlbum.spotifyTrackUris?.length ? `spotify:album:${fullAlbum.id}` : undefined
-
-  useEffect(() => {
-    // Reset when album changes
-    setFullAlbum(album)
-    setSavedIds(new Set())
-    setOtherAlbums([])
-    if (!album.id || album.id.length < 5) return
-
-    let cancelled = false
-    setLoadingEnrich(true)
-
-    const needFullFetch = album.tracks.length === 0
-
-    // Wave 1: full album (if needed) + other albums by artist
-    Promise.all([
-      needFullFetch ? fetchFullAlbum(album.id) : Promise.resolve(null),
-      album.artistId
-        ? fetchArtistAlbums(album.artistId, { limit: 10 })
-        : Promise.resolve({ items: [] as Album[], next: null, total: null }),
-    ]).then(async ([fetched, albumsPage]) => {
-      if (cancelled) return
-      const resolved = fetched ?? album
-      if (fetched) setFullAlbum(fetched)
-      setOtherAlbums(albumsPage.items.filter(a => a.id !== resolved.id).slice(0, 6))
-
-      // Wave 2: check saved state for tracks
-      const trackIds = (resolved.spotifyTrackUris ?? []).map(u => u.split(':')[2]).filter(Boolean)
-      if (trackIds.length) {
-        const saved = await checkSavedTracks(trackIds).catch(() => [] as boolean[])
-        if (!cancelled) {
-          setSavedIds(new Set(trackIds.filter((_, i) => saved[i])))
-        }
-      }
-    }).catch(() => {}).finally(() => {
-      if (!cancelled) setLoadingEnrich(false)
-    })
-
-    return () => { cancelled = true }
-  }, [album.id])
-
-  const queue = albumQueue(fullAlbum)
-
-  const toggleSave = (trackIdx: number) => {
-    const uri = fullAlbum.spotifyTrackUris?.[trackIdx]
-    if (!uri) return
-    const id = uri.split(':')[2]
-    const isSaved = savedIds.has(id)
-    const next = new Set(savedIds)
-    if (isSaved) { next.delete(id); removeTracks([id]).catch(() => setSavedIds(savedIds)) }
-    else { next.add(id); saveTracks([id]).catch(() => setSavedIds(savedIds)) }
-    setSavedIds(next)
-  }
+  const { fullAlbum, savedIds, otherAlbums, loadingEnrich, queue, contextUri, toggleSave } = useAlbumDetail(album)
 
   const swipe = useSwipe(
     () => tab === 0 ? onBack() : onTabChange(0),

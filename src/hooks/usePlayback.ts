@@ -14,41 +14,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Track } from '../data'
 import type { SpotifyEngine } from '../useSpotifyPlayer'
+import type { PlaybackState, UpNextTrack } from '../features/playback/playbackTypes'
+import { NULL_TRACK, getLocalEngine, getLocalUpNext, shuffleQueueFrom } from '../features/playback/localPlayback'
+import { getSdkRepeatMode, getSdkTrack, getSdkUpNext } from '../features/playback/spotifyPlayback'
+import { useMediaSession } from '../features/playback/useMediaSession'
 import {
   setRepeatMode as setRepeatModeApi,
   checkSavedTracks, saveTracks, removeTracks,
   fetchCurrentPlayback, fetchUserQueue,
-  pausePlayback, startPlayback as startPlaybackApi,
   skipToNext, skipToPrevious, seekToPosition, setShuffleState,
 } from '../spotifyApi'
 
-const NULL_TRACK: Track = { title: '', dur: 0, artist: '', album: '', color: '#000' }
-
-export interface UpNextTrack { title: string; artist: string; imageUrl?: string }
-
-export interface PlaybackState {
-  track: Track
-  upNext: UpNextTrack[]
-  playing: boolean
-  time: number
-  fav: boolean
-  shuffle: boolean
-  repeat: 0 | 1 | 2
-  started: boolean
-  prevDisabled: boolean
-  nextDisabled: boolean
-  // Local queue exposed for display only (track list screens)
-  queue: Track[]
-  idx: number
-  play: (q: Track[], i: number, contextUri?: string) => void
-  toggle: () => void
-  next: () => void
-  prev: () => void
-  seek: (fraction: number) => void
-  toggleFav: () => void
-  toggleShuffle: () => void
-  cycleRepeat: () => void
-}
+export type { PlaybackState, UpNextTrack } from '../features/playback/playbackTypes'
 
 export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   // ── Local state — non-SDK mode only ──────────────────────────────────────
@@ -73,9 +50,6 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const spotifyRef      = useRef<SpotifyEngine | null | undefined>(undefined)
   const localPlayingRef = useRef(false)
   const favRef          = useRef(false)
-  const nextCbRef       = useRef<() => void>(() => {})
-  const prevCbRef       = useRef<() => void>(() => {})
-  const seekCbRef       = useRef<(f: number) => void>(() => {})
   const gestureDidPlayRef = useRef(false)
   const startupSyncRef = useRef(false)
 
@@ -93,41 +67,22 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const sdkLive = inSdk && s != null
 
   const sdkCurrent = sdkLive ? s!.track_window.current_track : null
-
-  const track: Track = sdkCurrent
-    ? {
-        title:      sdkCurrent.name,
-        dur:        s!.duration / 1000,
-        artist:     sdkCurrent.artists[0]?.name ?? '',
-        album:      sdkCurrent.album.name,
-        color:      '#555',
-        imageUrl:   sdkCurrent.album.images[0]?.url,
-        spotifyUri: sdkCurrent.uri,
-      }
-    : (localQueue[localIdx] ?? NULL_TRACK)
+  const track: Track = getSdkTrack(spotify) ?? localQueue[localIdx] ?? NULL_TRACK
 
   const playing = sdkLive ? !s!.paused : localPlaying
   const time    = sdkLive ? s!.position / 1000 : localTime
   const shuffle = sdkLive ? s!.shuffle : localShuffle
-  const repeat  = sdkLive ? (s!.repeat_mode as 0 | 1 | 2) : localRepeat
+  const repeat  = sdkLive ? getSdkRepeatMode(spotify) : localRepeat
 
   const upNext: UpNextTrack[] = sdkLive
-    ? (s!.track_window.next_tracks ?? []).map(t => ({
-        title:    t.name,
-        artist:   t.artists[0]?.name ?? '',
-        imageUrl: t.album.images[0]?.url,
-      }))
-    : Array.from({ length: Math.min(5, localQueue.length - 1) }, (_, i) => {
-        const t = localQueue[(localIdx + i + 1) % localQueue.length]
-        return { title: t.title, artist: t.artist, imageUrl: t.imageUrl }
-      })
+    ? getSdkUpNext(spotify)
+    : getLocalUpNext(localQueue, localIdx)
 
   const disallows   = sdkLive ? s!.disallows : null
   const prevDisabled = Boolean(disallows?.skipping_prev)
   const nextDisabled = Boolean(disallows?.skipping_next)
 
-  const localEngine: 'audio' | 'raf' =
-    Boolean(localQueue[localIdx]?.previewUrl) ? 'audio' : 'raf'
+  const localEngine = getLocalEngine(localQueue[localIdx])
 
   // ── Startup: mirror active Spotify Connect playback without transfer ──────
   useEffect(() => {
@@ -156,41 +111,6 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
 
     return () => { live = false }
   }, [spotify])
-
-  // ── Media Session: register once ─────────────────────────────────────────
-  useEffect(() => {
-    if (!('mediaSession' in navigator)) return
-    navigator.mediaSession.setActionHandler('play',  () => inSdk ? void startPlaybackApi() : setLocalPlaying(true))
-    navigator.mediaSession.setActionHandler('pause', () => inSdk ? void pausePlayback()    : setLocalPlaying(false))
-    navigator.mediaSession.setActionHandler('nexttrack',     () => nextCbRef.current())
-    navigator.mediaSession.setActionHandler('previoustrack', () => prevCbRef.current())
-    navigator.mediaSession.setActionHandler('seekto', e => {
-      if (e.seekTime != null) seekCbRef.current(e.seekTime / (track.dur || 1))
-    })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // ── Media Session: metadata ───────────────────────────────────────────────
-  useEffect(() => {
-    if (!('mediaSession' in navigator) || !track.title) return
-    const artwork: MediaImage[] = track.imageUrl
-      ? [{ src: track.imageUrl, sizes: '640x640', type: 'image/jpeg' }]
-      : []
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: track.title, artist: track.artist, album: track.album, artwork,
-    })
-  }, [track.title, track.artist, track.album, track.imageUrl])
-
-  // ── Media Session: position state ────────────────────────────────────────
-  useEffect(() => {
-    if (!('mediaSession' in navigator) || !track.dur) return
-    try {
-      navigator.mediaSession.setPositionState({
-        duration: track.dur, playbackRate: 1,
-        position: Math.min(Math.max(0, time), track.dur),
-      })
-    } catch { /* old Safari */ }
-  }, [time, track.dur])
 
   // ── SDK: check liked state when current track changes ─────────────────────
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -305,13 +225,9 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     // Local mode: pre-shuffle if needed
     let aq = q, ai = i
     if (localShuffleRef.current) {
-      const rest = q.filter((_, ri) => ri !== i)
-      for (let j = rest.length - 1; j > 0; j--) {
-        const k = Math.floor(Math.random() * (j + 1))
-        ;[rest[j], rest[k]] = [rest[k], rest[j]]
-      }
       origQueueRef.current = q
-      aq = [q[i], ...rest]; ai = 0
+      const shuffled = shuffleQueueFrom(q, i)
+      aq = shuffled.queue; ai = shuffled.idx
     } else {
       origQueueRef.current = []
     }
@@ -385,13 +301,8 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
       const next = !prev
       if (next) {
         origQueueRef.current = localQueueRef.current
-        const cur = localQueueRef.current[localIdxRef.current]
-        const rest = localQueueRef.current.filter((_, i) => i !== localIdxRef.current)
-        for (let i = rest.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1))
-          ;[rest[i], rest[j]] = [rest[j], rest[i]]
-        }
-        setLocalQueue([cur, ...rest]); setLocalIdx(0)
+        const shuffled = shuffleQueueFrom(localQueueRef.current, localIdxRef.current)
+        setLocalQueue(shuffled.queue); setLocalIdx(shuffled.idx)
       } else {
         const orig = origQueueRef.current
         if (orig.length > 0) {
@@ -415,9 +326,19 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     setLocalRepeat(r => ((r + 1) % 3) as 0 | 1 | 2)
   }, [inSdk, s])
 
-  nextCbRef.current = next
-  prevCbRef.current = prev
-  seekCbRef.current = seek
+  const mediaPlay = useCallback(() => setLocalPlaying(true), [])
+  const mediaPause = useCallback(() => setLocalPlaying(false), [])
+
+  useMediaSession({
+    track,
+    time,
+    inSdk,
+    onLocalPlay: mediaPlay,
+    onLocalPause: mediaPause,
+    onNext: next,
+    onPrev: prev,
+    onSeek: seek,
+  })
 
   return {
     track, upNext, playing, time, fav, shuffle, repeat, started,

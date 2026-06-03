@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
-import { Album, Track } from '../data'
+import { useRef } from 'react'
+import { Album } from '../data'
 import { Icons } from '../components/icons'
 import { PlaybackState } from '../hooks/usePlayback'
 import { NowPlayingPane } from '../components/NowPlayingPane'
-import { fetchNewReleases, getRecentlyPlayed } from '../spotifyApi'
+import { useHubData } from './useHubData'
 
 const MENU: [string, number][] = [
   ['artists', 0], ['albums', 1], ['songs', 2], ['playlists', 3],
@@ -11,6 +11,7 @@ const MENU: [string, number][] = [
 
 interface Props {
   pb: PlaybackState
+  token: string | null
   onOpenCollection: (tab: number) => void
   onOpenNowPlaying: () => void
   onOpenAlbum: (album: Album) => void
@@ -18,31 +19,10 @@ interface Props {
   onSettings: () => void
 }
 
-interface HomeState {
-  newReleases: Album[]
-  recentTracks: Track[]
-  loaded: boolean
-}
-
-export function Hub({ pb, onOpenCollection, onOpenNowPlaying, onOpenAlbum, onShuffle, onSettings }: Props) {
+export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onOpenAlbum, onShuffle, onSettings }: Props) {
   const stripRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLDivElement>(null)
-
-  const [home, setHome] = useState<HomeState>({ newReleases: [], recentTracks: [], loaded: false })
-
-  useEffect(() => {
-    let cancelled = false
-    Promise.all([
-      fetchNewReleases(8),
-      getRecentlyPlayed({ limit: 20 }),
-    ]).then(([newReleases, recentPage]) => {
-      if (cancelled) return
-      setHome({ newReleases, recentTracks: recentPage.items.map(h => h.track as Track), loaded: true })
-    }).catch(() => {
-      if (!cancelled) setHome(prev => ({ ...prev, loaded: true }))
-    })
-    return () => { cancelled = true }
-  }, [])
+  const home = useHubData(token)
 
   const onScroll = () => {
     if (titleRef.current && stripRef.current) {

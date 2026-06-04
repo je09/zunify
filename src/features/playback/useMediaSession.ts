@@ -54,7 +54,7 @@ export function applyAppMediaSession({ mediaSession, createMetadata, track, dura
 
 export function useMediaSession({ track, time, duration, playing, inSdk, sdkTimestamp, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: MediaSessionOptions) {
   useEffect(() => {
-    if (!('mediaSession' in navigator)) return
+    if (!('mediaSession' in navigator) || inSdk) return
     const applyMediaSession = () => {
       if (!('mediaSession' in navigator)) return
       applyAppMediaSession({
@@ -80,12 +80,12 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
   }, [duration, inSdk, onLocalPause, onLocalPlay, onNext, onPrev, onSeek, playing, sdkTimestamp, track.album, track.artist, track.imageUrl, track.title])
 
   useEffect(() => {
-    if (!('mediaSession' in navigator) || !duration) return
+    if (!('mediaSession' in navigator) || !duration || inSdk) return
     try {
       navigator.mediaSession.setPositionState({
         duration, playbackRate: 1,
         position: Math.min(Math.max(0, time), duration),
       })
     } catch { /* old Safari */ }
-  }, [duration, time])
+  }, [duration, inSdk, time])
 }

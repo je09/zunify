@@ -199,6 +199,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     track,
     time,
     duration,
+    playing,
     inSdk: sdkLive,
     sdkTimestamp: s?.timestamp,
     onLocalPlay: mediaPlay,

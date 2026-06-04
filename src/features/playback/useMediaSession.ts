@@ -6,6 +6,7 @@ interface MediaSessionOptions {
   track: Track
   time: number
   duration: number
+  playing: boolean
   inSdk: boolean
   sdkTimestamp?: number
   onLocalPlay: () => void
@@ -15,7 +16,7 @@ interface MediaSessionOptions {
   onSeek: (fraction: number) => void
 }
 
-export function useMediaSession({ track, time, duration, inSdk, sdkTimestamp, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: MediaSessionOptions) {
+export function useMediaSession({ track, time, duration, playing, inSdk, sdkTimestamp, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: MediaSessionOptions) {
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
     navigator.mediaSession.setActionHandler('play', () => {
@@ -36,14 +37,20 @@ export function useMediaSession({ track, time, duration, inSdk, sdkTimestamp, on
   }, [duration, inSdk, onLocalPause, onLocalPlay, onNext, onPrev, onSeek])
 
   useEffect(() => {
-    if (!('mediaSession' in navigator) || !track.title) return
+    if (!('mediaSession' in navigator)) return
+    if (!track.title) {
+      navigator.mediaSession.metadata = null
+      navigator.mediaSession.playbackState = 'none'
+      return
+    }
     const artwork: MediaImage[] = track.imageUrl
       ? [{ src: track.imageUrl, sizes: '640x640', type: 'image/jpeg' }]
       : []
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title, artist: track.artist, album: track.album, artwork,
     })
-  }, [track.title, track.artist, track.album, track.imageUrl, sdkTimestamp])
+    navigator.mediaSession.playbackState = playing ? 'playing' : 'paused'
+  }, [track.title, track.artist, track.album, track.imageUrl, playing, sdkTimestamp])
 
   useEffect(() => {
     if (!('mediaSession' in navigator) || !duration) return

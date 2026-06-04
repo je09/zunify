@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { clearTokens, getValidToken, handleCallback, hasStoredTokens } from './spotifyAuth'
-
-const TOKEN_REFRESH_MS = 4 * 60 * 1000
+import { clearTokens, getTokenExpiresAt, getValidToken, handleCallback, hasStoredTokens } from './spotifyAuth'
 
 export function useSpotifyAuth() {
   const [token, setToken] = useState<string | null>(null)
@@ -39,14 +37,16 @@ export function useSpotifyAuth() {
     if (!token) return
     let active = true
 
-    const id = window.setInterval(async () => {
+    const refreshAt = getTokenExpiresAt()
+    const delay = Math.max(0, (refreshAt ?? Date.now()) - Date.now())
+    const id = window.setTimeout(async () => {
       const nextToken = await getValidToken()
       if (active) setToken(hasStoredTokens() ? nextToken : null)
-    }, TOKEN_REFRESH_MS)
+    }, delay)
 
     return () => {
       active = false
-      window.clearInterval(id)
+      window.clearTimeout(id)
     }
   }, [token])
 

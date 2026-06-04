@@ -33,7 +33,7 @@ export function useLongPress(getItems: () => MenuItem[]) {
     cancel()
     timer.current = setTimeout(() => {
       fired.current = true
-      if (navigator.vibrate) { try { navigator.vibrate(14) } catch (_) {} }
+      if (navigator.vibrate) { try { navigator.vibrate(14) } catch {} }
       openContextMenu({ items: getItems(), origin: origin.current })
     }, 450)
   }, [cancel, getItems])

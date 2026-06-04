@@ -131,7 +131,8 @@ export function useSwipe(onPrev: () => void, onNext: () => void) {
       const dy = t.clientY - start.touch.y
       start.touch = null
       if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.3) {
-        dx < 0 ? onNextRef.current() : onPrevRef.current()
+        if (dx < 0) onNextRef.current()
+        else onPrevRef.current()
       }
     }
     const onTouchCancel = () => { start.touch = null }
@@ -148,7 +149,8 @@ export function useSwipe(onPrev: () => void, onNext: () => void) {
       const dy = e.clientY - start.mouse.y
       start.mouse = null
       if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.3) {
-        dx < 0 ? onNextRef.current() : onPrevRef.current()
+        if (dx < 0) onNextRef.current()
+        else onPrevRef.current()
       }
     }
 

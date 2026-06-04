@@ -44,7 +44,7 @@ export function libraryReducer(state: LibraryState, action: LibraryAction): Libr
     case 'append-albums': {
       const albums = mergeAlbums(state.albums, action.items)
       const totals: LibraryTotals = { ...state.totals, albums: action.total ?? state.totals.albums }
-      return buildLibrary(albums, state.playlists, totals, action.userId, action.followedArtists)
+      return keepTransientState(state, buildLibrary(albums, state.playlists, totals, action.userId, action.followedArtists))
     }
 
     case 'append-liked-tracks': {
@@ -58,7 +58,7 @@ export function libraryReducer(state: LibraryState, action: LibraryAction): Libr
       }
       const playlists = [nextLiked, ...userPlaylists]
       const totals: LibraryTotals = { ...state.totals, songs: action.total ?? state.totals.songs }
-      return buildLibrary(state.albums, playlists, totals, action.userId, action.followedArtists)
+      return keepTransientState(state, buildLibrary(state.albums, playlists, totals, action.userId, action.followedArtists))
     }
 
     case 'append-playlists': {
@@ -71,7 +71,7 @@ export function libraryReducer(state: LibraryState, action: LibraryAction): Libr
       }
       const playlists = [nextLiked, ...mergePlaylists(userPlaylists, action.items)]
       const totals: LibraryTotals = { ...state.totals, songs: action.likedTotal ?? state.totals.songs, playlists: action.total ?? state.totals.playlists }
-      return buildLibrary(state.albums, playlists, totals, action.userId, action.followedArtists)
+      return keepTransientState(state, buildLibrary(state.albums, playlists, totals, action.userId, action.followedArtists))
     }
 
     case 'append-playlist-tracks': {
@@ -81,7 +81,11 @@ export function libraryReducer(state: LibraryState, action: LibraryAction): Libr
         totalTracks: action.total ?? pl.totalTracks,
         trackNextUrl: action.next,
       })
-      return buildLibrary(state.albums, playlists, state.totals, action.userId, action.followedArtists)
+      return keepTransientState(state, buildLibrary(state.albums, playlists, state.totals, action.userId, action.followedArtists))
     }
   }
+}
+
+function keepTransientState(state: LibraryState, next: LibraryState): LibraryState {
+  return { ...next, loading: state.loading, loadingMore: state.loadingMore, error: state.error }
 }

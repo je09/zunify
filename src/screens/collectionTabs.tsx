@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Track, Album, ArtistSummary, Playlist, SongEntry, albumQueue } from '../data'
 import { Section, Thumb, WP8Spinner } from '../components/Pivot'
 import { Icons } from '../components/icons'
-import { fetchRecommendations } from '../spotifyApi'
 
 export function hasMore(loaded: number, total: number | null): boolean {
   return total === null || loaded < total
@@ -29,7 +28,7 @@ export function groupArtistNamesByLetter(artists: string[]): { letter: string; n
   return [...byLetter.entries()].map(([letter, names]) => ({ letter, names }))
 }
 
-export function buildGenresFromArtists(artists: ArtistSummary[], albums: Album[]): { label: string; color: string; artistIds: string[] }[] {
+export function buildGenresFromArtists(artists: ArtistSummary[], albums: Album[]): { label: string; color: string; artistIds: string[]; artistNames: string[] }[] {
   const GENRE_COLORS = [
     '#5ca800','#1ba1e2','#a4c400','#d80073','#fa6800','#6a00ff','#3a8f6b','#c43b6b',
   ]
@@ -51,6 +50,7 @@ export function buildGenresFromArtists(artists: ArtistSummary[], albums: Album[]
         label: genre,
         color: albums.find(a => names.has(a.artist))?.color ?? GENRE_COLORS[index % GENRE_COLORS.length],
         artistIds: list.map(a => a.id),
+        artistNames: list.map(a => a.name),
       }
     })
 }
@@ -198,13 +198,13 @@ export function GenresTab({ artists, albums, onPlay }: {
   const genres = useMemo(() => buildGenresFromArtists(artists, albums), [artists, albums])
   const [loading, setLoading] = useState<string | null>(null)
 
-  const play = (g: { label: string; artistIds: string[] }) => {
+  const play = (g: { label: string; artistNames: string[] }) => {
     if (loading) return
     setLoading(g.label)
-    fetchRecommendations({ seed_artists: g.artistIds.slice(0, 5).join(','), limit: 20 })
-      .then(tracks => { if (tracks.length) onPlay(tracks, 0) })
-      .catch(() => {})
-      .finally(() => setLoading(null))
+    const names = new Set(g.artistNames)
+    const queue = albums.filter(album => names.has(album.artist)).flatMap(albumQueue)
+    if (queue.length) onPlay(queue, 0)
+    setLoading(null)
   }
 
   return (

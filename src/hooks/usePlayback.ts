@@ -169,19 +169,34 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     void startPlaybackApi().catch(() => setRemotePlaying(false))
   }, [remotePlaying])
 
-  const next = useCallback(() => {
-    void skipToNext()
-    setTime(0)
-    setIdx(i => queueRef.current.length ? (i + 1) % queueRef.current.length : 0)
-  }, [])
-
   const timeRef = useRef(time)
   timeRef.current = time
+
+  const next = useCallback(() => {
+    const previousIdx = idxRef.current
+    const previousTime = timeRef.current
+    setTime(0)
+    setIdx(i => queueRef.current.length ? (i + 1) % queueRef.current.length : 0)
+    void skipToNext().catch(() => {
+      setIdx(previousIdx)
+      setTime(previousTime)
+    })
+  }, [])
+
   const prev = useCallback(() => {
-    if (timeRef.current > 3) { setTime(0); void seekToPosition(0); return }
-    void skipToPrevious()
+    const previousIdx = idxRef.current
+    const previousTime = timeRef.current
+    if (timeRef.current > 3) {
+      setTime(0)
+      void seekToPosition(0).catch(() => setTime(previousTime))
+      return
+    }
     setTime(0)
     setIdx(i => queueRef.current.length ? (i - 1 + queueRef.current.length) % queueRef.current.length : 0)
+    void skipToPrevious().catch(() => {
+      setIdx(previousIdx)
+      setTime(previousTime)
+    })
   }, [])
 
   const seek = useCallback((fraction: number) => {
@@ -212,7 +227,9 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const toggleShuffle = useCallback(() => {
     const nextShuffle = !shuffle
     setRemoteShuffle(nextShuffle)
-    void setShuffleState(nextShuffle, spotifyRef.current?.deviceId).catch(() => setRemoteShuffle(!nextShuffle))
+    const engine = spotifyRef.current
+    const request = engine ? engine.setShuffle(nextShuffle) : setShuffleState(nextShuffle)
+    void request.catch(() => setRemoteShuffle(!nextShuffle))
   }, [shuffle])
 
   const cycleRepeat = useCallback(() => {

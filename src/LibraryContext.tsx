@@ -104,7 +104,7 @@ export function LibraryProvider({ token, children }: Props) {
     dispatch({ type: 'set-loading-more', kind: 'playlists', loading: true })
 
     Promise.all([
-      likedLoadedRef.current ? Promise.resolve(null) : fetchLikedTracksPage('/me/tracks?limit=1'),
+      likedLoadedRef.current ? Promise.resolve(null) : fetchLikedTracksPage('/me/tracks?limit=1').catch(() => null),
       fetchUserPlaylistsPage(nextPlaylistsRef.current),
     ])
       .then(([likedPage, playlistPage]) => {
@@ -174,6 +174,7 @@ export function LibraryProvider({ token, children }: Props) {
       return
     }
 
+    const requestGen = requestGenRef.current
     let cancelled = false
 
     dispatch({ type: 'set-loading', loading: true })
@@ -186,7 +187,7 @@ export function LibraryProvider({ token, children }: Props) {
       fetchLikedTracksPage('/me/tracks?limit=1'),
       fetchFollowedArtists(50).catch(() => [] as ArtistSummary[]),
     ]).then(([user, albumPage, playlistPage, likedPage, followed]) => {
-      if (cancelled) return
+      if (cancelled || requestGen !== requestGenRef.current) return
       userIdRef.current = user.id
       followedArtistsRef.current = followed
       nextAlbumsRef.current = albumPage.next
@@ -203,7 +204,7 @@ export function LibraryProvider({ token, children }: Props) {
       }
       dispatch({ type: 'replace', state: buildLibrary(albumPage.items, playlists, totals, user.id, followed) })
     }).catch((err: unknown) => {
-      if (!cancelled) dispatch({ type: 'set-error', error: String(err), loading: false })
+      if (!cancelled && requestGen === requestGenRef.current) dispatch({ type: 'set-error', error: String(err), loading: false })
     })
 
     return () => { cancelled = true }

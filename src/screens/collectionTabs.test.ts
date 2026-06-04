@@ -28,6 +28,7 @@ describe('collectionTabs', () => {
 
     expect(genres.map(genre => genre.label)).toEqual(['indie rock', 'pop'])
     expect(genres[0].artistIds).toEqual(['1', '2'])
+    expect(genres[0].artistNames).toEqual(['Artist One', 'Artist Two'])
     expect(genres[1].artistIds).toEqual(['1'])
   })
 })

@@ -5,6 +5,7 @@ import { Icons } from "../components/icons";
 import { ProgressBar, useSwipe } from "../components/Pivot";
 import { useLibrary } from "../LibraryContext";
 import { openContextMenu } from "../components/ContextMenu";
+import { addTracksToPlaylist } from "../spotifyApi";
 
 interface Props {
   pb: PlaybackState;
@@ -40,8 +41,9 @@ export function Player({
     toggleShuffle,
     cycleRepeat,
   } = pb;
-  const { likedTrackUris } = useLibrary();
+  const { likedTrackUris, playlists } = useLibrary();
   const [previewTime, setPreviewTime] = useState<number | null>(null);
+  const swipe = useSwipe(onBack, () => {});
 
   if (!track) return null;
 
@@ -50,8 +52,26 @@ export function Player({
   const repeatState = repeat === 0 ? "outline" : "on";
   const isLiked =
     fav || Boolean(track.spotifyUri && likedTrackUris.has(track.spotifyUri));
-  const swipe = useSwipe(onBack, () => {});
   const tint = `radial-gradient(125% 95% at 28% 16%, ${track.color}66 0%, #0c0c0c 60%, #060606 100%)`;
+  const shareTrack = () => {
+    const id = track.spotifyUri?.split(":")[2];
+    const url = id ? `https://open.spotify.com/track/${id}` : window.location.href;
+    void navigator.clipboard?.writeText(url);
+  };
+  const addToPlaylist = (origin: { x: number; y: number }) => {
+    if (!track.spotifyUri) return;
+    const targets = playlists.filter((playlist) => playlist.id !== "sp_liked");
+    if (!targets.length) return;
+    window.setTimeout(() => {
+      openContextMenu({
+        items: targets.map((playlist) => ({
+          label: playlist.name,
+          onClick: () => { void addTracksToPlaylist(playlist.id, [track.spotifyUri!]); },
+        })),
+        origin,
+      });
+    }, 260);
+  };
 
   const transport = (
     <div className={"transport" + (controls === "bottom" ? " bottom" : "")}>
@@ -192,9 +212,10 @@ export function Player({
                   ...(onGoToAlbum
                     ? [{ label: "go to album", onClick: onGoToAlbum }]
                     : []),
-                  { label: "share" },
-                  { label: "pin to start" },
-                  { label: "add to a playlist" },
+                  { label: "share", onClick: shareTrack },
+                  ...(track.spotifyUri
+                    ? [{ label: "add to a playlist", onClick: () => addToPlaylist({ x: e.clientX, y: e.clientY }) }]
+                    : []),
                 ],
                 origin: { x: e.clientX, y: e.clientY },
               })

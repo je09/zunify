@@ -19,6 +19,7 @@ export function Search({ onBack, onOpenAlbum, onOpenArtist, onPlayTrack }: Props
   const [tab, setTab] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const requestRef = useRef(0)
 
   const swipe = useSwipe(
     () => tab === 0 ? onBack() : setTab(t => t - 1),
@@ -30,9 +31,12 @@ export function Search({ onBack, onOpenAlbum, onOpenArtist, onPlayTrack }: Props
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current)
     const q = query.trim()
+    const request = ++requestRef.current
     if (!q) { setResults(null); return }
     timerRef.current = setTimeout(() => {
-      fetchSearch(q, 20).then(setResults).catch(() => {})
+      fetchSearch(q, 20).then(nextResults => {
+        if (request === requestRef.current) setResults(nextResults)
+      }).catch(() => {})
     }, 350)
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
   }, [query])

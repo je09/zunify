@@ -61,3 +61,8 @@ export async function saveTracks(ids: string[]): Promise<void> {
 export async function removeTracks(ids: string[]): Promise<void> {
   return spotifyMutate('DELETE', '/me/tracks', { ids })
 }
+
+export async function addTracksToPlaylist(playlistId: string, uris: string[]): Promise<void> {
+  if (!uris.length) return
+  await spotifyMutate('POST', `/playlists/${playlistId}/tracks`, { uris })
+}

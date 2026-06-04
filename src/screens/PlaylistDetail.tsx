@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Track, Playlist, playlistQueue, fmt } from '../data'
-import { checkSavedTracks, fetchRecommendations, saveTracks, removeTracks } from '../spotifyApi'
+import { checkSavedTracks, saveTracks, removeTracks } from '../spotifyApi'
 import { useSwipe, BottomBack, WP8Spinner } from '../components/Pivot'
 import { useLibrary } from '../LibraryContext'
 import { Icons } from '../components/icons'
@@ -12,17 +12,14 @@ interface Props {
 }
 
 export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
-  const { playlists, loadingMore, loadMorePlaylistTracks, userId } = useLibrary()
+  const { playlists, loadingMore, loadMorePlaylistTracks } = useLibrary()
   const current = playlists.find(pl => pl.id === playlist.id) ?? playlist
   const queue = playlistQueue(current)
   const swipe = useSwipe(onBack, () => {})
 
   const isSpotifyPlaylist = current.id !== 'sp_liked' && queue.some(t => t.spotifyUri)
   const contextUri = isSpotifyPlaylist ? `spotify:playlist:${current.id}` : undefined
-  const isOwnPlaylist = userId != null && current.id !== 'sp_liked'
-
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
-  const [recommendations, setRecommendations] = useState<Track[]>([])
 
   useEffect(() => {
     if (queue.length || !current.trackNextUrl || loadingMore.playlistTracks[current.id]) return
@@ -37,14 +34,6 @@ export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
     checkSavedTracks(ids)
       .then(saved => setSavedIds(new Set(ids.filter((_, i) => saved[i]))))
       .catch(() => {})
-
-    if (isOwnPlaylist) {
-      const seedTracks = ids.slice(0, 5).join(',')
-      const seedArtists = [...new Set(queue.slice(0, 5).map(t => t.artistId).filter(Boolean))].slice(0, 2).join(',')
-      fetchRecommendations({ seed_tracks: seedTracks || undefined, seed_artists: seedArtists || undefined, limit: 10 })
-        .then(setRecommendations)
-        .catch(() => {})
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playlist.id, queue.length])
 
@@ -92,26 +81,6 @@ export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
           />
         </div>
 
-        {recommendations.length > 0 && (
-          <div style={{ padding: '0 26px' }}>
-            <div className="section">recommended</div>
-            {recommendations.map((track, i) => (
-              <div key={track.spotifyUri ?? i} className="lrow">
-                <button
-                  className="play-circle"
-                  aria-label={`Play ${track.title}`}
-                  onClick={(e) => { e.stopPropagation(); onPlay([track], 0) }}
-                >
-                  {Icons.playCircle}
-                </button>
-                <div className="lrow-name song">
-                  <div className="lrow-title">{track.title}</div>
-                  <div className="lrow-sub">{track.artist}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
         <div style={{ height: 80 }} />
       </div>
       <BottomBack onBack={onBack} />

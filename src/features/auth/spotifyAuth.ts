@@ -26,6 +26,7 @@ export const SPOTIFY_SCOPES = [
 
 const TOKEN_KEY = 'sp_tokens'
 const STATE_KEY = 'sp_state'
+const VERIFIER_KEY = 'sp_verifier'
 
 interface Tokens { access: string; refresh: string; expiresAt: number }
 
@@ -86,8 +87,8 @@ export async function startLogin(): Promise<void> {
 
   const verifier = b64url(crypto.getRandomValues(new Uint8Array(64)))
   const state = b64url(crypto.getRandomValues(new Uint8Array(32)))
-  localStorage.setItem('sp_verifier', verifier)
-  localStorage.setItem(STATE_KEY, state)
+  sessionStorage.setItem(VERIFIER_KEY, verifier)
+  sessionStorage.setItem(STATE_KEY, state)
   const challenge = b64url(sha256(new TextEncoder().encode(verifier)))
 
   const url = new URL('https://accounts.spotify.com/authorize')
@@ -105,13 +106,13 @@ export async function handleCallback(): Promise<boolean> {
   const params = new URLSearchParams(window.location.search)
   const code = params.get('code')
   const state = params.get('state')
-  const verifier = localStorage.getItem('sp_verifier')
-  const expectedState = localStorage.getItem(STATE_KEY)
+  const verifier = sessionStorage.getItem(VERIFIER_KEY)
+  const expectedState = sessionStorage.getItem(STATE_KEY)
+  window.history.replaceState({}, '', window.location.pathname)
+  sessionStorage.removeItem(VERIFIER_KEY)
+  sessionStorage.removeItem(STATE_KEY)
   if (!code || !verifier || !state || state !== expectedState) return false
 
-  window.history.replaceState({}, '', window.location.pathname)
-  localStorage.removeItem('sp_verifier')
-  localStorage.removeItem(STATE_KEY)
 
   const res = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',
@@ -146,6 +147,10 @@ function load(): Tokens | null {
 export function getAccessToken(): string | null {
   const t = load()
   return t && Date.now() < t.expiresAt ? t.access : null
+}
+
+export function getTokenExpiresAt(): number | null {
+  return load()?.expiresAt ?? null
 }
 
 // Singleton so concurrent callers share one in-flight refresh request.

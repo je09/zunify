@@ -38,19 +38,6 @@ export async function fetchArtistTopTracks(id: string): Promise<Track[]> {
   const data = await spotifyGet<{ tracks: SpTrack[] }>(`/artists/${id}/top-tracks`)
   return data.tracks.map(mapTrack).filter((t): t is Track => t !== null)
 }
-
-
-export async function fetchRecommendations(params: {
-  seed_artists?: string
-  seed_genres?: string
-  seed_tracks?: string
-  limit?: number
-}): Promise<Track[]> {
-  const q = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))
-  const data = await spotifyGet<{ tracks: SpTrack[] }>(`/recommendations?${q.toString()}`)
-  return data.tracks.map(mapTrack).filter((t): t is Track => t !== null)
-}
-
 export async function fetchCurrentUser(): Promise<SpUser> {
   return spotifyGet<SpUser>('/me')
 }

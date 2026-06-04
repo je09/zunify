@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Track } from '../../data'
 import { pausePlayback, startPlayback as startPlaybackApi } from '../../spotifyApi'
 
@@ -9,7 +9,6 @@ interface MediaSessionOptions {
   playing: boolean
   inSdk: boolean
   sdkTimestamp?: number
-  getTime?: () => number
   onLocalPlay: () => void
   onLocalPause: () => void
   onNext: () => void
@@ -22,13 +21,19 @@ interface ApplyMediaSessionOptions extends MediaSessionOptions {
   createMetadata: (init: MediaMetadataInit) => MediaMetadata
 }
 
-function setMediaSessionHandler(mediaSession: MediaSession, action: MediaSessionAction, handler: MediaSessionActionHandler) {
+function setMediaSessionHandler(mediaSession: MediaSession, action: MediaSessionAction, handler: MediaSessionActionHandler | null) {
   try {
     mediaSession.setActionHandler(action, handler)
   } catch { /* unsupported action */ }
 }
 
-export function applyAppMediaSession({ mediaSession, createMetadata, track, time, duration, playing, inSdk, getTime, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: ApplyMediaSessionOptions) {
+function normalizeSeekTime(seekTime: number, duration: number) {
+  if (!Number.isFinite(seekTime) || !duration) return null
+  if (seekTime > duration && seekTime / 1000 <= duration) return seekTime / 1000
+  return Math.min(Math.max(0, seekTime), duration)
+}
+
+export function applyAppMediaSession({ mediaSession, createMetadata, track, duration, playing, inSdk, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: ApplyMediaSessionOptions) {
   setMediaSessionHandler(mediaSession, 'play', () => {
     if (inSdk) { void startPlaybackApi(); return }
     onLocalPlay()
@@ -42,14 +47,12 @@ export function applyAppMediaSession({ mediaSession, createMetadata, track, time
   setMediaSessionHandler(mediaSession, 'nexttrack', onNext)
   setMediaSessionHandler(mediaSession, 'previoustrack', onPrev)
   setMediaSessionHandler(mediaSession, 'seekto', e => {
-    if (e.seekTime != null) onSeek(e.seekTime / (duration || 1))
+    if (e.seekTime == null) return
+    const seekTime = normalizeSeekTime(e.seekTime, duration)
+    if (seekTime != null) onSeek(seekTime / duration)
   })
-  setMediaSessionHandler(mediaSession, 'seekbackward', e => {
-    onSeek(((getTime?.() ?? time) - (e.seekOffset || 10)) / (duration || 1))
-  })
-  setMediaSessionHandler(mediaSession, 'seekforward', e => {
-    onSeek(((getTime?.() ?? time) + (e.seekOffset || 10)) / (duration || 1))
-  })
+  setMediaSessionHandler(mediaSession, 'seekbackward', null)
+  setMediaSessionHandler(mediaSession, 'seekforward', null)
 
   if (!track.title) {
     mediaSession.metadata = null
@@ -66,9 +69,6 @@ export function applyAppMediaSession({ mediaSession, createMetadata, track, time
 }
 
 export function useMediaSession({ track, time, duration, playing, inSdk, sdkTimestamp, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: MediaSessionOptions) {
-  const timeRef = useRef(time)
-  timeRef.current = time
-
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
     const applyMediaSession = () => {
@@ -76,7 +76,6 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
       applyAppMediaSession({
         mediaSession: navigator.mediaSession,
         createMetadata: init => new MediaMetadata(init),
-        getTime: () => timeRef.current,
         track, time, duration, playing, inSdk, sdkTimestamp,
         onLocalPlay, onLocalPause, onNext, onPrev, onSeek,
       })

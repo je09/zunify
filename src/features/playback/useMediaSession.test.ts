@@ -55,4 +55,37 @@ describe('applyAppMediaSession', () => {
     expect(appNext).toHaveBeenCalledOnce()
     expect(spotifyNext).not.toHaveBeenCalled()
   })
+
+  it('normalizes lockscreen seek times inflated by Spotify position state', () => {
+    const handlers: Partial<Record<MediaSessionAction, MediaSessionActionHandler | null>> = {}
+    const onSeek = vi.fn()
+    const mediaSession = {
+      metadata: null as MediaMetadata | null,
+      playbackState: 'none' as MediaSessionPlaybackState,
+      setActionHandler: vi.fn((action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+        handlers[action] = handler
+      }),
+    } as unknown as MediaSession
+
+    applyAppMediaSession({
+      mediaSession,
+      createMetadata: init => init as MediaMetadata,
+      track,
+      time: 0,
+      duration: track.dur,
+      playing: true,
+      inSdk: true,
+      onLocalPlay: vi.fn(),
+      onLocalPause: vi.fn(),
+      onNext: vi.fn(),
+      onPrev: vi.fn(),
+      onSeek,
+    })
+
+    handlers.seekto?.({ action: 'seekto', seekTime: 90_000 })
+
+    expect(onSeek).toHaveBeenCalledWith(0.5)
+    expect(handlers.seekbackward).toBeNull()
+    expect(handlers.seekforward).toBeNull()
+  })
 })

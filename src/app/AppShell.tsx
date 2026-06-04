@@ -5,7 +5,7 @@ import { useNavigationStack } from './navigation/useNavigationStack'
 import { useSpotifyPlayer } from '../useSpotifyPlayer'
 import { useLibrary } from '../LibraryContext'
 import { Album, Playlist, Track } from '../data'
-import { fetchArtistTopTracks, setShuffleState, startPlayback } from '../spotifyApi'
+import { fetchArtistTopTracks, fetchCurrentUser, setShuffleState } from '../spotifyApi'
 import { Hub } from '../screens/Hub'
 import { Collection } from '../screens/Collection'
 import { ArtistCard } from '../screens/ArtistCard'
@@ -80,26 +80,22 @@ export function AppShell({ token, onLogout }: AppShellProps) {
           onOpenNowPlaying={() => nav.push({ screen: 'nowplaying' })}
           onOpenAlbum={(album) => nav.push({ screen: 'album', album, tab: 0 })}
           onShuffle={() => {
-            const contextUri = userId ? `spotify:user:${userId}:collection` : undefined
-            void spotifyEngine?.player.activateElement()
-            const playTarget = () => {
-              if (!contextUri) return Promise.resolve()
-              artistPlayRequestRef.current += 1
-              nav.push({ screen: 'nowplaying' })
-              return startPlayback({ context_uri: contextUri }, spotifyEngine?.deviceId)
-            }
-            void setShuffleState(true, spotifyEngine?.deviceId)
-              .catch(() => {})
-              .then(() => {
-                void playTarget()
-                  .then(() => {
-                    setTimeout(() => {
-                      void setShuffleState(true, spotifyEngine?.deviceId)
-                        .catch(e => setSdkError(`Spotify shuffle failed: ${e instanceof Error ? e.message : String(e)}`))
-                    }, 500)
-                  })
-                  .catch(e => setSdkError(`Spotify playback failed: ${e instanceof Error ? e.message : String(e)}`))
-              })
+            void (async () => {
+              if (!token) {
+                setSdkError('Spotify login required for shuffle.')
+                return
+              }
+              const id = userId ?? (await fetchCurrentUser()).id
+              const contextUri = `spotify:user:${id}:collection`
+              void spotifyEngine?.player.activateElement()
+              if (spotifyEngine) await spotifyEngine.setShuffle(true)
+              else await setShuffleState(true)
+              playAndGo([], 0, contextUri)
+              window.setTimeout(() => {
+                void (spotifyEngine ? spotifyEngine.setShuffle(true) : setShuffleState(true))
+                  .catch(e => setSdkError(`Spotify shuffle failed: ${e instanceof Error ? e.message : String(e)}`))
+              }, 500)
+            })().catch(e => setSdkError(`Spotify shuffle failed: ${e instanceof Error ? e.message : String(e)}`))
           }}
           onChangeLooks={() => setOverlay('looks')}
           onConnectSpotify={() => setOverlay('spotify')}

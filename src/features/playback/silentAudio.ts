@@ -4,10 +4,11 @@
 // Must be called from a user-gesture handler (play/toggle) — iOS requires it.
 
 let audio: HTMLAudioElement | null = null
+let blobUrl: string | null = null
 
-function buildSilentWavUri(): string {
+function buildSilentWavUrl(): string {
   const sampleRate = 8000
-  const numSamples = 8000 // 1 second
+  const numSamples = sampleRate * 30 // 30 seconds — reduces loop-reset glitches vs 1s
   const buf = new Uint8Array(44 + numSamples)
   const v = new DataView(buf.buffer)
   buf.set([82, 73, 70, 70], 0)          // "RIFF"
@@ -24,13 +25,15 @@ function buildSilentWavUri(): string {
   buf.set([100, 97, 116, 97], 36)       // "data"
   v.setUint32(40, numSamples, true)     // data size
   buf.fill(0x80, 44)                    // 0x80 = silence in 8-bit unsigned PCM
-  return `data:audio/wav;base64,${btoa(String.fromCharCode(...buf))}`
+  // Blob URL avoids large base64 data URI (~320KB)
+  blobUrl = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }))
+  return blobUrl
 }
 
 export function claimAudioSession(): void {
   if (audio) return
   audio = document.createElement('audio')
-  audio.src = buildSilentWavUri()
+  audio.src = buildSilentWavUrl()
   audio.loop = true
   void audio.play().catch(() => {})
 }

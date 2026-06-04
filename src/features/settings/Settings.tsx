@@ -1,38 +1,51 @@
-import { useState } from 'react'
-import { getClientId, getRedirectUri, setClientId } from '../../spotifyConfig'
-import { startLogin } from '../auth/spotifyAuth'
-import { Icons } from '../../components/icons'
+import { useState } from "react";
+import { getClientId, getRedirectUri, setClientId } from "../../spotifyConfig";
+import { startLogin } from "../auth/spotifyAuth";
+import { Icons } from "../../components/icons";
 
-const buildDateValue = (import.meta as unknown as { env?: { VITE_BUILD_DATE?: string } }).env?.VITE_BUILD_DATE
-const buildDate = buildDateValue ? new Date(buildDateValue).toLocaleString() : 'dev'
-
+const buildDateValue = (
+  import.meta as unknown as { env?: { VITE_BUILD_DATE?: string } }
+).env?.VITE_BUILD_DATE;
+const buildDate = buildDateValue
+  ? new Date(buildDateValue).toLocaleString()
+  : "dev";
 
 interface Props {
-  token: string | null
-  sdkError: string | null
-  onClearSdkError: () => void
-  onLogout: () => void
-  onClose: () => void
+  token: string | null;
+  sdkError: string | null;
+  onClearSdkError: () => void;
+  onLogout: () => void;
+  onClose: () => void;
 }
 
-export function Settings({ token, sdkError, onClearSdkError, onLogout, onClose }: Props) {
-  const [clientId, setClientIdState] = useState(getClientId)
-  const [loginError, setLoginError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const loggedIn = Boolean(token)
+export function Settings({
+  token,
+  sdkError,
+  onClearSdkError,
+  onLogout,
+  onClose,
+}: Props) {
+  const [clientId, setClientIdState] = useState(getClientId);
+  const [loginError, setLoginError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const loggedIn = Boolean(token);
 
   const handleLogin = async () => {
-    setLoginError('')
-    setBusy(true)
-    try { await startLogin() }
-    catch (e) { setLoginError(e instanceof Error ? e.message : String(e)) }
-    finally { setBusy(false) }
-  }
+    setLoginError("");
+    setBusy(true);
+    try {
+      await startLogin();
+    } catch (e) {
+      setLoginError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const saveClientId = (value: string) => {
-    setClientIdState(value)
-    setClientId(value)
-  }
+    setClientIdState(value);
+    setClientId(value);
+  };
 
   return (
     <div className="overlay-screen">
@@ -48,34 +61,54 @@ export function Settings({ token, sdkError, onClearSdkError, onLogout, onClose }
               <div className="sp-tick">✓</div>
               <div className="sp-h">connected</div>
               <div className="sp-sub">
-                zPlayer is linked to your Spotify account. Playback syncs automatically.
+                zunify is linked to your Spotify account. Playback syncs
+                automatically.
               </div>
               {sdkError && (
-                <div className="sp-sub" style={{ color: '#e74c3c', marginTop: 12 }}>
+                <div
+                  className="sp-sub"
+                  style={{ color: "#e74c3c", marginTop: 12 }}
+                >
                   {sdkError}
                   <button
-                    style={{ marginLeft: 8, background: 'none', border: 'none', color: '#e74c3c', cursor: 'pointer', fontSize: 13 }}
+                    style={{
+                      marginLeft: 8,
+                      background: "none",
+                      border: "none",
+                      color: "#e74c3c",
+                      cursor: "pointer",
+                      fontSize: 13,
+                    }}
                     onClick={onClearSdkError}
                     aria-label="Dismiss"
-                  >✕</button>
+                  >
+                    ✕
+                  </button>
                 </div>
               )}
               <div className="sp-actions">
-                <button className="sp-btn ghost" onClick={onLogout}>disconnect</button>
-                <button className="sp-btn ghost" onClick={onClose}>done</button>
+                <button className="sp-btn ghost" onClick={onLogout}>
+                  disconnect
+                </button>
+                <button className="sp-btn ghost" onClick={onClose}>
+                  done
+                </button>
               </div>
               <div className="sp-foot">build: {buildDate}</div>
             </>
           ) : (
             <>
-              <div className="sp-h">authorize zPlayer</div>
+              <div className="sp-h">authorize zunify</div>
               <div className="sp-sub">
-                Enter your Spotify Client ID to connect. Get it from{' '}
-                <span style={{ color: '#1DB954' }}>developer.spotify.com</span>{' '}
+                Enter your Spotify Client ID to connect. Get it from{" "}
+                <span style={{ color: "#1DB954" }}>developer.spotify.com</span>{" "}
                 → Dashboard → Create app.
               </div>
               <div className="sp-sub" style={{ marginTop: 10, fontSize: 17 }}>
-                Redirect URI: <code style={{ fontSize: 13, opacity: .8 }}>{getRedirectUri()}</code>
+                Redirect URI:{" "}
+                <code style={{ fontSize: 13, opacity: 0.8 }}>
+                  {getRedirectUri()}
+                </code>
               </div>
               <ul className="sp-perms">
                 <li>view your playlists and saved music</li>
@@ -93,7 +126,15 @@ export function Settings({ token, sdkError, onClearSdkError, onLogout, onClose }
                 />
               </div>
               {loginError && (
-                <div className="sp-sub" style={{ color: '#e74c3c', marginTop: 8, whiteSpace: 'pre-line', fontSize: 16 }}>
+                <div
+                  className="sp-sub"
+                  style={{
+                    color: "#e74c3c",
+                    marginTop: 8,
+                    whiteSpace: "pre-line",
+                    fontSize: 16,
+                  }}
+                >
                   {loginError}
                 </div>
               )}
@@ -103,12 +144,16 @@ export function Settings({ token, sdkError, onClearSdkError, onLogout, onClose }
                   disabled={busy || !clientId.trim()}
                   onClick={handleLogin}
                 >
-                  {busy ? 'connecting…' : 'agree'}
+                  {busy ? "connecting…" : "agree"}
                 </button>
-                <button className="sp-btn ghost" onClick={onClose}>cancel</button>
+                <button className="sp-btn ghost" onClick={onClose}>
+                  cancel
+                </button>
               </div>
               <div className="sp-foot">build: {buildDate}</div>
-              <div className="sp-foot">you can revoke access anytime in settings</div>
+              <div className="sp-foot">
+                you can revoke access anytime in settings
+              </div>
             </>
           )}
         </div>
@@ -118,5 +163,5 @@ export function Settings({ token, sdkError, onClearSdkError, onLogout, onClose }
         </button>
       </div>
     </div>
-  )
+  );
 }

@@ -16,13 +16,14 @@ interface Props {
   onOpenCollection: (tab: number) => void
   onOpenNowPlaying: () => void
   onOpenAlbum: (album: Album) => void
+  onSearch: () => void
   onShuffle: () => void
   onChangeLooks: () => void
   onConnectSpotify: () => void
   spotify: boolean
 }
 
-export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onOpenAlbum, onShuffle, onChangeLooks, onConnectSpotify, spotify }: Props) {
+export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onOpenAlbum, onSearch, onShuffle, onChangeLooks, onConnectSpotify, spotify }: Props) {
   const stripRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLDivElement>(null)
   const home = useHubData(token)
@@ -108,7 +109,7 @@ export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onOpenAlbum
           <button className="ic-btn" aria-label="Shuffle all" onClick={onShuffle}>
             {Icons.shuffle2}
           </button>
-          <button className="ic-btn" aria-label="Search">
+          <button className="ic-btn" aria-label="Search" onClick={onSearch}>
             {Icons.search}
           </button>
         </div>

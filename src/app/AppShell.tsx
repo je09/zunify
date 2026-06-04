@@ -7,6 +7,7 @@ import { useLibrary } from '../LibraryContext'
 import { Album, Playlist, Track } from '../data'
 import { fetchArtistTopTracks, fetchCurrentUser, setShuffleState } from '../spotifyApi'
 import { Hub } from '../screens/Hub'
+import { Search } from '../screens/Search'
 import { Collection } from '../screens/Collection'
 import { ArtistCard } from '../screens/ArtistCard'
 import { AlbumDetail } from '../screens/AlbumDetail'
@@ -18,6 +19,7 @@ import { ContextMenuHost } from '../components/ContextMenu'
 
 type NavFrame =
   | { screen: 'home' }
+  | { screen: 'search' }
   | { screen: 'collection'; tab: number }
   | { screen: 'artist'; name: string; artistId?: string; tab: number }
   | { screen: 'album'; album: Album; tab: number }
@@ -97,9 +99,21 @@ export function AppShell({ token, onLogout }: AppShellProps) {
               }, 500)
             })().catch(e => setSdkError(`Spotify shuffle failed: ${e instanceof Error ? e.message : String(e)}`))
           }}
+          onSearch={() => nav.push({ screen: 'search' })}
           onChangeLooks={() => setOverlay('looks')}
           onConnectSpotify={() => setOverlay('spotify')}
           spotify={Boolean(token)}
+        />
+      )
+      break
+
+    case 'search':
+      body = (
+        <Search
+          onBack={nav.back}
+          onOpenAlbum={(album) => nav.push({ screen: 'album', album, tab: 0 })}
+          onOpenArtist={(name, artistId) => nav.push({ screen: 'artist', name, artistId, tab: 0 })}
+          onPlayTrack={(track) => playAndGo([track], 0)}
         />
       )
       break

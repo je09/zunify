@@ -92,3 +92,23 @@ export async function fetchRecommendations(params: {
 export async function fetchCurrentUser(): Promise<SpUser> {
   return spotifyGet<SpUser>('/me')
 }
+
+export interface SearchResults {
+  tracks: Track[]
+  albums: Album[]
+  artists: ArtistSummary[]
+}
+
+export async function fetchSearch(q: string, limit = 20): Promise<SearchResults> {
+  const params = new URLSearchParams({ q, type: 'track,album,artist', limit: String(limit) })
+  const data = await spotifyGet<{
+    tracks: SpPaged<SpTrack>
+    albums: SpPaged<SpSimpleAlbum2>
+    artists: SpPaged<SpFullArtist>
+  }>(`/search?${params}`)
+  return {
+    tracks: data.tracks.items.map(mapTrack).filter((t): t is Track => t !== null),
+    albums: data.albums.items.map(mapSimpleAlbum),
+    artists: data.artists.items.map(mapArtist),
+  }
+}

@@ -517,6 +517,16 @@ body {
   @keyframes ctxFade { from { opacity: 0; } to { opacity: 1; } }
 }
 
+/* ── Search field ───────────────────────────────────────────────────────── */
+.search-field-wrap { padding: 4px 26px 0; flex-shrink: 0; }
+.search-field {
+  width: 100%; background: none; border: none; border-bottom: 1px solid var(--line);
+  color: var(--fg); font-size: 42px; font-weight: 250; letter-spacing: -.5px;
+  padding: 4px 0 6px; outline: none; -webkit-appearance: none;
+}
+.search-field::placeholder { color: var(--dim); opacity: .55; }
+.search-field::-webkit-search-cancel-button { -webkit-appearance: none; }
+
 /* ── Settings overlays (slide in from right) ────────────────────────────── */
 .overlay-screen {
   position: absolute; inset: 0; z-index: 60; background: var(--bg);

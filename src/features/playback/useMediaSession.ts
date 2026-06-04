@@ -1,8 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useCallback } from 'react'
 import { Track } from '../../data'
 import { pausePlayback, startPlayback as startPlaybackApi } from '../../spotifyApi'
-
-let installedSpy = false
 
 function logMediaSessionDebug(event: string, data: Record<string, unknown>) {
   const env = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env
@@ -16,38 +14,6 @@ function logMediaSessionDebug(event: string, data: Record<string, unknown>) {
   const forced = window.localStorage.getItem('zplayer:media-session-debug') === '1'
   if (!env?.DEV && !isPrivateHost && !forced) return
   console.log(`[media-session] ${event}`, data)
-}
-
-function installMediaSessionSpy(ref: { current: () => void }) {
-  if (installedSpy) return
-  installedSpy = true
-
-  const proto = Object.getPrototypeOf(navigator.mediaSession)
-  const desc = Object.getOwnPropertyDescriptor(proto, 'metadata')
-
-  Object.defineProperty(navigator.mediaSession, 'metadata', {
-    get() { return desc?.get?.call(navigator.mediaSession) },
-    set(value) {
-      desc?.set?.call(navigator.mediaSession, value)
-      const title = (value as MediaMetadata & { title?: string })?.title ?? ''
-      if (title.includes('Spotify')) {
-        logMediaSessionDebug('spider-rewritten', { title })
-        try { ref.current() } catch {}
-      }
-    },
-    configurable: true,
-  })
-
-  const origSetPositionState = navigator.mediaSession.setPositionState
-  let positionStateApply = false
-  navigator.mediaSession.setPositionState = (...args: Parameters<typeof origSetPositionState>) => {
-    origSetPositionState(...args)
-    if (!positionStateApply) {
-      positionStateApply = true
-      positionStateApply = false
-      try { ref.current() } catch {}
-    }
-  }
 }
 
 interface MediaSessionOptions {
@@ -136,8 +102,7 @@ export function applyAppPositionState(mediaSession: MediaSession, time: number, 
 }
 
 export function useMediaSession({ track, time, duration, playing, inSdk, sdkTimestamp, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: MediaSessionOptions) {
-  const ref = useRef<() => void>(() => {})
-  ref.current = () => {
+  const applyMediaSession = useCallback(() => {
     if (!('mediaSession' in navigator)) return
     applyAppMediaSession({
       mediaSession: navigator.mediaSession,
@@ -145,7 +110,7 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
       track, time, duration, playing, inSdk, sdkTimestamp,
       onLocalPlay, onLocalPause, onNext, onPrev, onSeek,
     })
-  }
+  }, [track, time, duration, playing, inSdk, sdkTimestamp, onLocalPlay, onLocalPause, onNext, onPrev, onSeek])
 
   useEffect(() => {
     logMediaSessionDebug('metadata-effect', {
@@ -157,15 +122,25 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
       sdkTimestamp,
     })
     if (!('mediaSession' in navigator)) return
-    ref.current()
-    installMediaSessionSpy(ref)
+    applyMediaSession()
 
-    const timeouts = [100, 500, 1500].map(delay => window.setTimeout(ref.current, delay))
+    // Continuously reclaim metadata from Spotify SDK.
+    // Spotify overwrites navigator.mediaSession.metadata on every state change
+    // despite enableMediaSession: false. We apply faster than it does.
+    const interval = window.setInterval(applyMediaSession, 2000)
+    const timeouts = [100, 500, 1500].map(delay => window.setTimeout(applyMediaSession, delay))
+    const onVisibilityChange = () => applyMediaSession()
+    const onPageShow = () => applyMediaSession()
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('pageshow', onPageShow)
 
     return () => {
       timeouts.forEach(window.clearTimeout)
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('pageshow', onPageShow)
     }
-  }, [duration, inSdk, playing, sdkTimestamp, track.album, track.artist, track.imageUrl, track.title])
+  }, [duration, inSdk, playing, sdkTimestamp, track.album, track.artist, track.imageUrl, track.title, applyMediaSession])
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return

@@ -1,13 +1,3 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg width="20px" height="20px" viewBox="0 0 20 20" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-    <title>repeat1</title>
-    <g id="repeat1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-        <g id="Oval-Copy" transform="translate(1.722426, 1.023346)" stroke="currentColor">
-            <path fill="currentColor" d="M6,0.5 L6,5.7267318 L1.14660618,0.5 L6,0.5 Z" id="Rectangle"></path>
-        </g>
-        <text id="1" font-family="SegoeUI-Bold, Segoe UI" font-size="13" font-weight="bold" fill="currentColor">
-            <tspan x="11.9279247" y="11.4924094">1</tspan>
-        </text>
-        <path d="M3.0487178,20.6233265 C7.46496319,20.6233265 11.2613323,17.0952026 11.2613323,12.6789572 C11.2613323,8.26271185 7.68125804,4.68263761 3.26501265,4.68263761" id="Oval" stroke="currentColor" stroke-width="2.5" transform="translate(7.155025, 12.652982) rotate(137.000000) translate(-7.155025, -12.652982) "></path>
-    </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">
+  <path fill="currentColor" fill-rule="evenodd" stroke="currentColor" d="M7.7 1.5v5.3L5.5 4.3a8 8 0 0 0-2.7 5.5A7 7 0 0 0 4.7 15a7 7 0 0 0 9.8.7l1 1.1a8.7 8.7 0 0 1-12-.8 9 9 0 0 1-2.2-6.2 9 9 0 0 1 3.2-6.5L2.9 1.5zm8.7 1.3v7.6h1.9v.6h-4.8v-.6h1.9V3.6l-2 .4v-.6z"/>
 </svg>

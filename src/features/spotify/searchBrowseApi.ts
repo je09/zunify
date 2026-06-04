@@ -40,11 +40,6 @@ export async function fetchArtistTopTracks(id: string): Promise<Track[]> {
 }
 
 
-export async function fetchNewReleases(limit = 20): Promise<Album[]> {
-  const data = await spotifyGet<{ albums: SpPaged<SpSimpleAlbum2> }>(`/browse/new-releases?limit=${limit}`)
-  return data.albums.items.map(mapSimpleAlbum)
-}
-
 export async function fetchRecommendations(params: {
   seed_artists?: string
   seed_genres?: string

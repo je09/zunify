@@ -1,5 +1,4 @@
 import { useRef } from 'react'
-import { Album } from '../data'
 import { Icons } from '../components/icons'
 import { PlaybackState } from '../hooks/usePlayback'
 import { NowPlayingPane } from '../components/NowPlayingPane'
@@ -15,7 +14,6 @@ interface Props {
   token: string | null
   onOpenCollection: (tab: number) => void
   onOpenNowPlaying: () => void
-  onOpenAlbum: (album: Album) => void
   onSearch: () => void
   onShuffle: () => void
   onChangeLooks: () => void
@@ -23,7 +21,7 @@ interface Props {
   spotify: boolean
 }
 
-export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onOpenAlbum, onSearch, onShuffle, onChangeLooks, onConnectSpotify, spotify }: Props) {
+export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onSearch, onShuffle, onChangeLooks, onConnectSpotify, spotify }: Props) {
   const stripRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLDivElement>(null)
   const home = useHubData(token)
@@ -67,23 +65,6 @@ export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onOpenAlbum
             ))}
           </div>
         </div>
-
-        {home.newReleases.length > 0 && (
-          <div className="pane">
-            <div className="pane-head">new releases</div>
-            <div className="hub-grid">
-              {home.newReleases.map(a => (
-                <div key={a.id} className="hub-card" onClick={() => onOpenAlbum(a)}>
-                  <div className="hub-card-art">
-                    {a.imageUrl ? <img src={a.imageUrl} alt="" /> : <div style={{ background: a.color, width: '100%', height: '100%' }} />}
-                  </div>
-                  <div className="hub-card-name">{a.title}</div>
-                  <div className="hub-card-sub">{a.artist}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {home.recentTracks.length > 0 && (
           <div className="pane">

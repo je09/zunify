@@ -80,7 +80,6 @@ export function AppShell({ token, onLogout }: AppShellProps) {
           token={token}
           onOpenCollection={(tab) => nav.push({ screen: 'collection', tab })}
           onOpenNowPlaying={() => nav.push({ screen: 'nowplaying' })}
-          onOpenAlbum={(album) => nav.push({ screen: 'album', album, tab: 0 })}
           onShuffle={() => {
             void (async () => {
               if (!token) {

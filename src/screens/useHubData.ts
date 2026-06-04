@@ -12,7 +12,10 @@ export function useHubData(token: string | null): HubData {
   const [home, setHome] = useState<HubData>({ newReleases: [], recentTracks: [], loaded: false })
 
   useEffect(() => {
-    if (!token) return
+    if (!token) {
+      setHome({ newReleases: [], recentTracks: [], loaded: false })
+      return
+    }
     let cancelled = false
     Promise.all([
       fetchNewReleases(8),

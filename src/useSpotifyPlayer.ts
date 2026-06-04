@@ -25,10 +25,14 @@ let sdkPromise: Promise<void> | null = null
 function loadSdk(): Promise<void> {
   if (sdkPromise) return sdkPromise
   if (window.Spotify) return (sdkPromise = Promise.resolve())
-  sdkPromise = new Promise((resolve) => {
+  sdkPromise = new Promise((resolve, reject) => {
     window.onSpotifyWebPlaybackSDKReady = resolve
     const s = document.createElement('script')
     s.src = 'https://sdk.scdn.co/spotify-player.js'
+    s.onerror = () => {
+      sdkPromise = null
+      reject(new Error('Spotify Web Playback SDK failed to load'))
+    }
     document.head.appendChild(s)
   })
   return sdkPromise
@@ -43,16 +47,29 @@ export function useSpotifyPlayer(
 ): SpotifyEngine | null {
   const [engine, setEngine] = useState<SpotifyEngine | null>(null)
   const playerRef = useRef<Spotify.Player | null>(null)
+  const pollRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!enabled) {
       playerRef.current?.disconnect()
       playerRef.current = null
+      if (pollRef.current !== null) window.clearInterval(pollRef.current)
+      pollRef.current = null
       setEngine(null)
       return
     }
 
     let live = true
+
+    const stopPolling = () => {
+      if (pollRef.current !== null) window.clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+
+    const setSdkState = (state: Spotify.PlaybackState | null) => {
+      if (!live) return
+      setEngine(prev => (prev ? { ...prev, sdkState: state } : null))
+    }
 
     loadSdk().then(() => {
       if (!live) return
@@ -101,14 +118,20 @@ export function useSpotifyPlayer(
           startPlaybackContext: playContext,
           setShuffle,
         }))
+
+        stopPolling()
+        pollRef.current = window.setInterval(() => {
+          void player.getCurrentState().then(setSdkState).catch(() => {})
+        }, 1000)
       })
 
       player.addListener('player_state_changed', (state) => {
-        if (!live || !state) return
-        setEngine(prev => (prev ? { ...prev, sdkState: state } : null))
+        if (!live) return
+        setSdkState(state)
       })
 
       player.addListener('not_ready', () => {
+        stopPolling()
         if (live) setEngine(null)
       })
 
@@ -127,10 +150,13 @@ export function useSpotifyPlayer(
       })
 
       void player.connect()
+    }).catch(e => {
+      if (live) onError?.(e instanceof Error ? e.message : String(e))
     })
 
     return () => {
       live = false
+      stopPolling()
       playerRef.current?.disconnect()
       playerRef.current = null
       setEngine(null)

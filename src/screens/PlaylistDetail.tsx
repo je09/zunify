@@ -25,6 +25,11 @@ export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
   const [recommendations, setRecommendations] = useState<Track[]>([])
 
   useEffect(() => {
+    if (queue.length || !current.trackNextUrl || loadingMore.playlistTracks[current.id]) return
+    loadMorePlaylistTracks(current.id)
+  }, [current.id, current.trackNextUrl, queue.length, loadingMore.playlistTracks, loadMorePlaylistTracks])
+
+  useEffect(() => {
     if (!queue.length) return
     const ids = queue.map(t => t.spotifyUri?.split(':')[2]).filter(Boolean) as string[]
     if (!ids.length) return

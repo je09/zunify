@@ -1,4 +1,4 @@
-import { getValidToken } from '../auth/spotifyAuth'
+import { getValidToken, refreshAccessToken } from '../auth/spotifyAuth'
 
 export const SPOTIFY_API_BASE = 'https://api.spotify.com/v1'
 
@@ -30,6 +30,11 @@ export async function spotifyRequest<T>(method: SpotifyMethod, path: string, bod
     const wait = parseInt(res.headers.get('Retry-After') ?? String(2 ** attempt), 10)
     await new Promise(r => setTimeout(r, wait * 1000))
     return spotifyRequest<T>(method, path, body, params, attempt + 1)
+  }
+
+  if (res.status === 401 && attempt < 1) {
+    const refreshed = await refreshAccessToken()
+    if (refreshed) return spotifyRequest<T>(method, path, body, params, attempt + 1)
   }
 
   if (!res.ok) throw new Error(`spotify_${res.status}`)

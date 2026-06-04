@@ -22,10 +22,13 @@ export function buildLibrary(
   const likedTrackUris = new Set(liked.map(t => t.spotifyUri).filter((u): u is string => !!u))
 
   const songsAlbums = mergeAlbums(albums, albumsFromLiked(liked))
-  const idMap = buildArtistIdMap(albums)
+  const idMap = buildArtistIdMap(songsAlbums)
   followedArtists.forEach(a => { if (!idMap.has(a.name)) idMap.set(a.name, a.id) })
 
-  const allArtistNames = [...new Set(followedArtists.map(a => a.name))].sort((x, y) =>
+  const allArtistNames = [...new Set([
+    ...songsAlbums.map(a => a.artist),
+    ...followedArtists.map(a => a.name),
+  ])].sort((x, y) =>
     x.replace(/^the\s+/i, '').localeCompare(y.replace(/^the\s+/i, ''), 'en', { sensitivity: 'base' })
   )
 

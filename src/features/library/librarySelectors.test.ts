@@ -20,7 +20,7 @@ describe('librarySelectors', () => {
     expect(mergeAlbums([saved], [likedDerived, other]).map(a => a.id)).toEqual(['1', '2'])
   })
 
-  it('builds songs from albums and artists from followed artists', () => {
+  it('builds songs and combines library artists with followed artists', () => {
     const library = buildLibrary(
       [album('1', 'The Band', 'Zed')],
       [],
@@ -29,7 +29,7 @@ describe('librarySelectors', () => {
       [{ id: 'artist-1', name: 'Followed Band' }],
     )
 
-    expect(library.artists).toEqual(['Followed Band'])
+    expect(library.artists).toEqual(['The Band', 'Followed Band'])
     expect(library.songs).toHaveLength(1)
     expect(library.songs[0].title).toBe('Zed song')
   })

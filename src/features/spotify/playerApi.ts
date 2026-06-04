@@ -1,15 +1,19 @@
 import { Track } from '../../data'
-import { getValidToken } from '../auth/spotifyAuth'
+import { getValidToken, refreshAccessToken } from '../auth/spotifyAuth'
 import { SPOTIFY_API_BASE, spotifyGet, spotifyMutate, SpotifyParams } from './client'
 import { mapTrack } from './mappers'
 import { spotifyPage, SpotifyPage } from './shared'
 import type { SpPlaybackState, SpPlayHistory, SpTrack } from './types'
 
-async function fetchPlaybackState(): Promise<SpPlaybackState | null> {
+async function fetchPlaybackState(attempt = 0): Promise<SpPlaybackState | null> {
   const token = await getValidToken()
   if (!token) throw new Error('not_authenticated')
   const res = await fetch(`${SPOTIFY_API_BASE}/me/player`, { headers: { Authorization: `Bearer ${token}` } })
   if (res.status === 204) return null
+  if (res.status === 401 && attempt < 1) {
+    const refreshed = await refreshAccessToken()
+    if (refreshed) return fetchPlaybackState(attempt + 1)
+  }
   if (!res.ok) throw new Error(`spotify_${res.status}`)
   return res.json() as Promise<SpPlaybackState>
 }
@@ -53,6 +57,10 @@ async function spotifyDeviceRequest(method: 'PUT', path: string, deviceId: strin
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   })
+  if (res.status === 401 && attempt < 1) {
+    const refreshed = await refreshAccessToken()
+    if (refreshed) return spotifyDeviceRequest(method, path, deviceId, body, params, attempt + 1)
+  }
   if (res.status === 429 && attempt < 4) {
     const wait = parseInt(res.headers.get('Retry-After') ?? String(2 ** attempt), 10)
     await new Promise(r => setTimeout(r, wait * 1000))

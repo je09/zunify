@@ -13,10 +13,11 @@ interface Props {
   onOpenAlbum: (album: Album) => void
   onOpenPlaylist: (pl: Playlist) => void
   onPlay: (queue: Track[], idx: number, contextUri?: string) => void
+  onPlayArtist: (artistId: string, fallbackQueue: Track[]) => void
   onBack: () => void
 }
 
-export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpenPlaylist, onPlay, onBack }: Props) {
+export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpenPlaylist, onPlay, onPlayArtist, onBack }: Props) {
   const { albums, followedArtists, artists, songs, playlists, likedTrackUris, loading, loadingMore, error, totals, loadMore, artistIdByName } = useLibrary()
   const swipe = useSwipe(
     () => tab === 0 ? onBack() : onTabChange(tab - 1),
@@ -42,7 +43,7 @@ export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpen
       <div className="page-toppad" />
       <Pivot tabs={TABS} active={tab} onChange={onTabChange} />
       <PivotArea tab={tab} ref={swipe}>
-        <ArtistsTab artists={artists} albumsByArtist={albumsByArtist} artistIdByName={artistIdByName} hasMore={hasMore(albums.length, totals.albums)} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onPlay={onPlay} />
+        <ArtistsTab artists={artists} albumsByArtist={albumsByArtist} artistIdByName={artistIdByName} hasMore={hasMore(albums.length, totals.albums)} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onPlay={onPlay} onPlayArtist={onPlayArtist} />
         <AlbumsTab albums={albums} total={totals.albums} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenAlbum={onOpenAlbum} />
         <SongsTab songs={songs} likedTrackUris={likedTrackUris} hasMore={hasMore(likedTrackCount, totals.songs)} loadingMore={loadingMore.tracks} onLoadMore={() => loadMore('tracks')} onPlay={onPlay} />
         <GenresTab artists={followedArtists} albums={albums} onPlay={onPlay} />

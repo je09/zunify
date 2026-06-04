@@ -65,11 +65,12 @@ function LoadMoreSentinel({ active, loading, onLoadMore }: { active: boolean; lo
   return <div ref={ref} style={{ height: 80, color: '#888', paddingTop: 16 }}>{loading ? 'loading more...' : ''}</div>
 }
 
-export function ArtistsTab({ artists, albumsByArtist, artistIdByName, hasMore, loadingMore, onLoadMore, onOpenArtist, onPlay }: {
+export function ArtistsTab({ artists, albumsByArtist, artistIdByName, hasMore, loadingMore, onLoadMore, onOpenArtist, onPlay, onPlayArtist }: {
   artists: string[]; albumsByArtist: Map<string, Album[]>; artistIdByName: Map<string, string>
   hasMore: boolean; loadingMore: boolean; onLoadMore: () => void
   onOpenArtist: (n: string, id?: string) => void
   onPlay: (q: Track[], i: number, ctx?: string) => void
+  onPlayArtist: (artistId: string, fallbackQueue: Track[]) => void
 }) {
   // Group by first letter so sticky tile resolves within its group — no overlap at transition
   const groups = useMemo(() => {
@@ -90,7 +91,11 @@ export function ArtistsTab({ artists, albumsByArtist, artistIdByName, hasMore, l
                 <button
                   className="play-circle"
                   aria-label={`Play ${name}`}
-                  onClick={(e) => { e.stopPropagation(); if (queue.length) onPlay(queue, 0) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (artistId) onPlayArtist(artistId, queue)
+                    else if (queue.length) onPlay(queue, 0)
+                  }}
                 >
                   {Icons.playCircle}
                 </button>

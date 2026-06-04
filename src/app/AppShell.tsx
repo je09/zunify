@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { usePlayback } from '../hooks/usePlayback'
 import { useTheme } from '../hooks/useTheme'
 import { useNavigationStack } from './navigation/useNavigationStack'
 import { useSpotifyPlayer } from '../useSpotifyPlayer'
 import { useLibrary } from '../LibraryContext'
 import { Album, Playlist, Track } from '../data'
-import { setShuffleState } from '../spotifyApi'
+import { fetchArtistTopTracks, setShuffleState } from '../spotifyApi'
 import { Hub } from '../screens/Hub'
 import { Collection } from '../screens/Collection'
 import { ArtistCard } from '../screens/ArtistCard'
@@ -41,14 +41,31 @@ export function AppShell({ token, onLogout }: AppShellProps) {
   const nav = useNavigationStack<NavFrame>({ screen: 'home' })
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [controls] = useState<'top' | 'bottom'>('top')
+  const artistPlayRequestRef = useRef(0)
 
   const updateTab = (tab: number) =>
     nav.updateCurrent(frame => 'tab' in frame ? { ...frame, tab } : frame)
 
   const playAndGo = (queue: Track[], idx: number, contextUri?: string) => {
     if (queue.length === 0 && !contextUri) return
+    artistPlayRequestRef.current += 1
     pb.play(queue, idx, contextUri)
     nav.push({ screen: 'nowplaying' })
+  }
+
+  const playArtistTopTracks = (artistId: string, fallbackQueue: Track[]) => {
+    const request = ++artistPlayRequestRef.current
+    void fetchArtistTopTracks(artistId)
+      .then(tracks => {
+        if (request !== artistPlayRequestRef.current) return
+        if (tracks.length) playAndGo(tracks, 0)
+        else playAndGo(fallbackQueue, 0)
+      })
+      .catch(e => {
+        if (request !== artistPlayRequestRef.current) return
+        if (fallbackQueue.length) playAndGo(fallbackQueue, 0)
+        else setSdkError(`Spotify artist tracks failed: ${e instanceof Error ? e.message : String(e)}`)
+      })
   }
 
   let body: JSX.Element
@@ -97,6 +114,7 @@ export function AppShell({ token, onLogout }: AppShellProps) {
           onOpenAlbum={(album) => nav.push({ screen: 'album', album, tab: 0 })}
           onOpenPlaylist={(playlist) => nav.push({ screen: 'playlist', playlist })}
           onPlay={playAndGo}
+          onPlayArtist={playArtistTopTracks}
           onBack={nav.back}
         />
       )

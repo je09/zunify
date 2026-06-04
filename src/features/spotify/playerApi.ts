@@ -1,6 +1,6 @@
 import { Track } from '../../data'
 import { getValidToken } from '../auth/spotifyAuth'
-import { SPOTIFY_API_BASE, spotifyGet, spotifyMutate } from './client'
+import { SPOTIFY_API_BASE, spotifyGet, spotifyMutate, SpotifyParams } from './client'
 import { mapTrack } from './mappers'
 import { spotifyPage, SpotifyPage } from './shared'
 import type { SpPlaybackState, SpPlayHistory, SpTrack } from './types'
@@ -39,12 +39,13 @@ export async function transferPlayback(deviceId: string, play = false): Promise<
   return spotifyMutate('PUT', '/me/player', { device_ids: [deviceId], play })
 }
 
-async function spotifyDeviceRequest(method: 'PUT', path: string, deviceId: string, body?: unknown): Promise<Response> {
+async function spotifyDeviceRequest(method: 'PUT', path: string, deviceId: string, body?: unknown, params?: SpotifyParams, attempt = 0): Promise<Response> {
   const token = await getValidToken()
   if (!token) throw new Error('not_authenticated')
   const url = new URL(`${SPOTIFY_API_BASE}${path}`)
+  if (params) Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, String(value)))
   url.searchParams.set('device_id', deviceId)
-  return fetch(url.toString(), {
+  const res = await fetch(url.toString(), {
     method,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -52,6 +53,12 @@ async function spotifyDeviceRequest(method: 'PUT', path: string, deviceId: strin
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   })
+  if (res.status === 429 && attempt < 4) {
+    const wait = parseInt(res.headers.get('Retry-After') ?? String(2 ** attempt), 10)
+    await new Promise(r => setTimeout(r, wait * 1000))
+    return spotifyDeviceRequest(method, path, deviceId, body, params, attempt + 1)
+  }
+  return res
 }
 
 export async function startPlayback(
@@ -59,13 +66,13 @@ export async function startPlayback(
   deviceId?: string,
 ): Promise<void> {
   if (deviceId) {
-    let res = await spotifyDeviceRequest('PUT', '/me/player/play', deviceId, body)
-    if (res.status === 404) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const res = await spotifyDeviceRequest('PUT', '/me/player/play', deviceId, body)
+      if (res.ok) return
+      if (res.status !== 404 || attempt === 2) throw new Error(`spotify_${res.status}`)
       await transferPlayback(deviceId)
-      await new Promise(r => setTimeout(r, 400))
-      res = await spotifyDeviceRequest('PUT', '/me/player/play', deviceId, body)
+      await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
     }
-    if (!res.ok) throw new Error(`spotify_${res.status}`)
     return
   }
   return spotifyMutate('PUT', '/me/player/play', body)
@@ -92,6 +99,16 @@ export async function setRepeatMode(state: 'track' | 'context' | 'off'): Promise
 }
 
 export async function setShuffleState(state: boolean, deviceId?: string): Promise<void> {
+  if (deviceId) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const res = await spotifyDeviceRequest('PUT', '/me/player/shuffle', deviceId, undefined, { state })
+      if (res.ok) return
+      if (res.status !== 404 || attempt === 2) throw new Error(`spotify_${res.status}`)
+      await transferPlayback(deviceId)
+      await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
+    }
+    return
+  }
   return spotifyMutate('PUT', '/me/player/shuffle', undefined, deviceId ? { state, device_id: deviceId } : { state })
 }
 

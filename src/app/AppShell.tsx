@@ -81,6 +81,7 @@ export function AppShell({ token, onLogout }: AppShellProps) {
           onOpenAlbum={(album) => nav.push({ screen: 'album', album, tab: 0 })}
           onShuffle={() => {
             const contextUri = userId ? `spotify:user:${userId}:collection` : undefined
+            void spotifyEngine?.player.activateElement()
             const playTarget = () => {
               if (!contextUri) return Promise.resolve()
               artistPlayRequestRef.current += 1

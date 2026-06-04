@@ -128,6 +128,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     setRemotePlaying(true)
 
     const engine = spotifyRef.current
+    if (engine) void engine.player.activateElement()
     const request = command.type === 'context'
       ? engine
         ? engine.startPlaybackContext(command.contextUri, command.offsetPosition)
@@ -141,6 +142,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
 
   const toggle = useCallback(() => {
     if (spotifyRef.current?.player) {
+      void spotifyRef.current.player.activateElement()
       void spotifyRef.current.player.togglePlay()
       return
     }

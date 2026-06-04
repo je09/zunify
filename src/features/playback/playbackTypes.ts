@@ -7,6 +7,7 @@ export interface PlaybackState {
   upNext: UpNextTrack[]
   playing: boolean
   time: number
+  duration: number
   fav: boolean
   shuffle: boolean
   repeat: 0 | 1 | 2

@@ -1,5 +1,5 @@
 import { Track, Album, fmt } from '../data'
-import { Pivot, PivotArea, Thumb, useSwipe, BottomBack } from '../components/Pivot'
+import { Pivot, PivotArea, Overline, Thumb, useSwipe, BottomBack } from '../components/Pivot'
 import { Icons } from '../components/icons'
 import { useAlbumDetail } from './useAlbumDetail'
 
@@ -23,7 +23,8 @@ export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist
 
   return (
     <div className="page">
-      <Pivot tabs={['songs', 'about']} active={tab} onChange={onTabChange} />
+      <Overline>{fullAlbum.artist}</Overline>
+      <Pivot tabs={['songs', 'review']} active={tab} onChange={onTabChange} />
       <PivotArea tab={tab} ref={swipe}>
 
         {/* songs */}
@@ -99,15 +100,15 @@ export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist
           {otherAlbums.length > 0 && (
             <>
               <div className="section">more by {fullAlbum.artist}</div>
-              <div className="card-albums-grid">
-                {otherAlbums.map(a => (
-                  <div key={a.id} className="card-album-cell" onClick={() => onOpenAlbum(a)}>
-                    <Thumb color={a.color} imageUrl={a.imageUrl} />
+              {otherAlbums.map(a => (
+                <div key={a.id} className="card-album" onClick={() => onOpenAlbum(a)}>
+                  <Thumb color={a.color} size={104} imageUrl={a.imageUrl} />
+                  <div className="card-album-meta">
                     <div className="ca-title">{a.title}</div>
-                    <div className="ca-sub">{a.year || ''}</div>
+                    <div className="ca-sub">{a.artist}</div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </>
           )}
           <div style={{ height: 80 }} />

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Track, Album, ArtistSummary, fmt } from '../data'
 import { fetchArtist, fetchArtistTopTracks, fetchArtistAlbums, checkSavedTracks } from '../spotifyApi'
-import { Pivot, PivotArea, Thumb, useSwipe, BottomBack } from '../components/Pivot'
+import { Pivot, PivotArea, Overline, Thumb, useSwipe, BottomBack } from '../components/Pivot'
 import { Icons } from '../components/icons'
 
 interface Props {
@@ -79,17 +79,17 @@ return (
         className="card-bg"
         style={bgImage
           ? { backgroundImage: `url(${bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center top' }
-          : { background: 'linear-gradient(160deg, #1a1a2e 0%, #0f3460 100%)' }
+          : {}
         }
       />
       <div className="card-scrim" />
       <div className="card-body">
-        <div className="artist-heading">{displayName}</div>
+        <Overline>{displayName}</Overline>
         {contextUri && topTracks.length > 0 && (
           <div className="artist-actions">
             <button
               className="al-playall"
-              onClick={() => onPlay(topTracks, 0, contextUri)}
+              onClick={() => onPlay(topTracks, 0)}
               aria-label={`Play ${displayName}`}
             >
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
@@ -111,30 +111,30 @@ return (
               <>
                 {albums.length > 0 && (
                   <>
-                    <div className="section" style={{ paddingTop: 16 }}>albums</div>
-                    <div className="card-albums-grid">
-                      {albums.map(a => (
-                        <div key={a.id} className="card-album-cell" onClick={() => onOpenAlbum(a)}>
-                          <Thumb color={a.color} imageUrl={a.imageUrl} />
+                    <div className="section" style={{ paddingTop: 16 }}>in collection</div>
+                    {albums.map(a => (
+                      <div key={a.id} className="card-album" onClick={() => onOpenAlbum(a)}>
+                        <Thumb color={a.color} size={104} imageUrl={a.imageUrl} />
+                        <div className="card-album-meta">
                           <div className="ca-title">{a.title}</div>
-                          <div className="ca-sub">{a.year || ''}</div>
+                          <div className="ca-sub">{a.artist}</div>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </>
                 )}
                 {singles.length > 0 && (
                   <>
                     <div className="section">singles</div>
-                    <div className="card-albums-grid">
-                      {singles.map(a => (
-                        <div key={a.id} className="card-album-cell" onClick={() => onOpenAlbum(a)}>
-                          <Thumb color={a.color} imageUrl={a.imageUrl} />
+                    {singles.map(a => (
+                      <div key={a.id} className="card-album" onClick={() => onOpenAlbum(a)}>
+                        <Thumb color={a.color} size={104} imageUrl={a.imageUrl} />
+                        <div className="card-album-meta">
                           <div className="ca-title">{a.title}</div>
-                          <div className="ca-sub">{a.year || ''}</div>
+                          <div className="ca-sub">{a.artist}</div>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </>
                 )}
               </>

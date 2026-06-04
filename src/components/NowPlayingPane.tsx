@@ -9,8 +9,8 @@ interface Props {
 }
 
 export function NowPlayingPane({ pb, onOpen }: Props) {
-  const { track, playing, time, shuffle, repeat, toggle, next, prev, seek, toggleShuffle, cycleRepeat } = pb
-  const pct = track.dur > 0 ? Math.min(100, (time / track.dur) * 100) : 0
+  const { track, playing, time, duration, shuffle, repeat, toggle, next, prev, seek, toggleShuffle, cycleRepeat } = pb
+  const pct = duration > 0 ? Math.min(100, (time / duration) * 100) : 0
 
   return (
     <div className="nowpane">
@@ -34,7 +34,7 @@ export function NowPlayingPane({ pb, onOpen }: Props) {
       <ProgressBar pct={pct} onSeek={seek} />
       <div className="times">
         <span className="elapsed">{fmt(time)}</span>
-        <span className="remain">-{fmt(track.dur - time)}</span>
+        <span className="remain">-{fmt(duration - time)}</span>
       </div>
 
       <div className="track" onClick={onOpen}>

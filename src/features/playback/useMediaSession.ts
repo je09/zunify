@@ -5,6 +5,7 @@ import { pausePlayback, startPlayback as startPlaybackApi } from '../../spotifyA
 interface MediaSessionOptions {
   track: Track
   time: number
+  duration: number
   inSdk: boolean
   onLocalPlay: () => void
   onLocalPause: () => void
@@ -13,7 +14,7 @@ interface MediaSessionOptions {
   onSeek: (fraction: number) => void
 }
 
-export function useMediaSession({ track, time, inSdk, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: MediaSessionOptions) {
+export function useMediaSession({ track, time, duration, inSdk, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: MediaSessionOptions) {
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
     navigator.mediaSession.setActionHandler('play', () => inSdk ? void startPlaybackApi() : onLocalPlay())
@@ -21,9 +22,9 @@ export function useMediaSession({ track, time, inSdk, onLocalPlay, onLocalPause,
     navigator.mediaSession.setActionHandler('nexttrack', onNext)
     navigator.mediaSession.setActionHandler('previoustrack', onPrev)
     navigator.mediaSession.setActionHandler('seekto', e => {
-      if (e.seekTime != null) onSeek(e.seekTime / (track.dur || 1))
+      if (e.seekTime != null) onSeek(e.seekTime / (duration || 1))
     })
-  }, [inSdk, onLocalPause, onLocalPlay, onNext, onPrev, onSeek, track.dur])
+  }, [duration, inSdk, onLocalPause, onLocalPlay, onNext, onPrev, onSeek])
 
   useEffect(() => {
     if (!('mediaSession' in navigator) || !track.title) return
@@ -36,12 +37,12 @@ export function useMediaSession({ track, time, inSdk, onLocalPlay, onLocalPause,
   }, [track.title, track.artist, track.album, track.imageUrl])
 
   useEffect(() => {
-    if (!('mediaSession' in navigator) || !track.dur) return
+    if (!('mediaSession' in navigator) || !duration) return
     try {
       navigator.mediaSession.setPositionState({
-        duration: track.dur, playbackRate: 1,
-        position: Math.min(Math.max(0, time), track.dur),
+        duration, playbackRate: 1,
+        position: Math.min(Math.max(0, time), duration),
       })
     } catch { /* old Safari */ }
-  }, [time, track.dur])
+  }, [duration, time])
 }

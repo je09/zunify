@@ -13,6 +13,8 @@ import { AlbumDetail } from '../screens/AlbumDetail'
 import { PlaylistDetail } from '../screens/PlaylistDetail'
 import { Player } from '../screens/Player'
 import { Settings } from '../features/settings/Settings'
+import { LooksScreen } from '../features/settings/LooksScreen'
+import { ContextMenuHost } from '../components/ContextMenu'
 
 type NavFrame =
   | { screen: 'home' }
@@ -21,6 +23,8 @@ type NavFrame =
   | { screen: 'album'; album: Album; tab: number }
   | { screen: 'playlist'; playlist: Playlist }
   | { screen: 'nowplaying' }
+
+type Overlay = 'looks' | 'spotify' | null
 
 interface AppShellProps {
   token: string | null
@@ -35,7 +39,8 @@ export function AppShell({ token, onLogout }: AppShellProps) {
   const { playlists, userId } = useLibrary()
 
   const nav = useNavigationStack<NavFrame>({ screen: 'home' })
-  const [showSettings, setShowSettings] = useState(false)
+  const [overlay, setOverlay] = useState<Overlay>(null)
+  const [controls] = useState<'top' | 'bottom'>('top')
 
   const updateTab = (tab: number) =>
     nav.updateCurrent(frame => 'tab' in frame ? { ...frame, tab } : frame)
@@ -70,7 +75,9 @@ export function AppShell({ token, onLogout }: AppShellProps) {
                 }
               })
           }}
-          onSettings={() => setShowSettings(true)}
+          onChangeLooks={() => setOverlay('looks')}
+          onConnectSpotify={() => setOverlay('spotify')}
+          spotify={Boolean(token)}
         />
       )
       break
@@ -128,25 +135,36 @@ export function AppShell({ token, onLogout }: AppShellProps) {
       break
 
     case 'nowplaying':
-      body = <Player pb={pb} onBack={nav.back} />
+      body = <Player pb={pb} onBack={nav.back} controls={controls} />
       break
   }
 
   return (
-    <div className={`app-shell theme-${theme.mode}`}>
-      {showSettings && (
+    <div className={`app-shell theme-${theme.mode}`} id="app-shell">
+      <div className="screen-content">
+        <div className={`screen-in screen-${nav.direction}`} key={nav.key}>
+          {body}
+        </div>
+      </div>
+      <ContextMenuHost />
+      {overlay === 'looks' && (
+        <LooksScreen
+          theme={theme.mode}
+          accent={theme.accent}
+          onTheme={theme.setMode}
+          onAccent={theme.setAccent}
+          onBack={() => setOverlay(null)}
+        />
+      )}
+      {overlay === 'spotify' && (
         <Settings
-          theme={theme}
           token={token}
           sdkError={sdkError}
           onClearSdkError={() => setSdkError(null)}
           onLogout={onLogout}
-          onClose={() => setShowSettings(false)}
+          onClose={() => setOverlay(null)}
         />
       )}
-      <div className={`screen-in screen-${nav.direction}`} key={nav.key}>
-        {body}
-      </div>
     </div>
   )
 }

@@ -38,6 +38,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const [started, setStarted]           = useState(false)
   const [fav, setFav]                   = useState(false)
   const [sdkTime, setSdkTime]           = useState(0)
+  const [localAudioDuration, setLocalAudioDuration] = useState(0)
 
   const audioRef   = useRef<HTMLAudioElement>(new Audio())
   const rafRef     = useRef(0)
@@ -85,6 +86,9 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const nextDisabled = Boolean(disallows?.skipping_next)
 
   const localEngine = getLocalEngine(localQueue[localIdx])
+  const duration = !sdkLive && localEngine === 'audio' && localAudioDuration > 0
+    ? localAudioDuration
+    : track.dur
 
   // ── Startup: mirror active Spotify Connect playback without transfer ──────
   useEffect(() => {
@@ -144,6 +148,11 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   useEffect(() => {
     const audio = audioRef.current
     const onTimeUpdate = () => setLocalTime(audio.currentTime)
+    const onDurationChange = () => {
+      const dur = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0
+      setLocalAudioDuration(dur)
+      if (dur > 0 && audio.currentTime > dur) audio.currentTime = dur
+    }
     const onEnded = () => {
       if (localRepeatRef.current === 2) { audio.currentTime = 0; void audio.play(); return }
       const queue   = localQueueRef.current
@@ -152,6 +161,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
       // Directly drive audio using refs — React effects are suspended on iOS
       // when the app is backgrounded, so we can't rely on the src-sync effect.
       if (nextTrack?.previewUrl) {
+        setLocalAudioDuration(0)
         audio.src = nextTrack.previewUrl
         audio.load()
         gestureDidPlayRef.current = true  // prevent src-sync effect from overwriting on foreground
@@ -161,10 +171,14 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
       setLocalTime(0)
     }
     audio.addEventListener('timeupdate', onTimeUpdate)
+    audio.addEventListener('loadedmetadata', onDurationChange)
+    audio.addEventListener('durationchange', onDurationChange)
     audio.addEventListener('ended', onEnded)
     return () => {
       audio.pause()
       audio.removeEventListener('timeupdate', onTimeUpdate)
+      audio.removeEventListener('loadedmetadata', onDurationChange)
+      audio.removeEventListener('durationchange', onDurationChange)
       audio.removeEventListener('ended', onEnded)
       audio.src = ''
     }
@@ -176,6 +190,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     if (inSdk || localEngine !== 'audio') { audio.pause(); return }
     if (gestureDidPlayRef.current) { gestureDidPlayRef.current = false; return }
     const src = localQueue[localIdx]?.previewUrl ?? ''
+    setLocalAudioDuration(0)
     audio.src = src
     if (src) { audio.load(); if (localPlayingRef.current) void audio.play() }
   }, [localQueue[localIdx]?.previewUrl, localEngine, localIdx, inSdk])
@@ -230,25 +245,51 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
 
+  const startLocalPlayback = useCallback((q: Track[], i: number) => {
+    setLocalQueue(q); setLocalIdx(i); setLocalTime(0)
+    setLocalPlaying(true)
+
+    const t = q[i]
+    if (t?.previewUrl) {
+      const audio = audioRef.current
+      setLocalAudioDuration(0)
+      audio.src = t.previewUrl; audio.load()
+      gestureDidPlayRef.current = true
+      void audio.play()
+    }
+  }, [])
+
   const play = useCallback((q: Track[], i: number, contextUri?: string) => {
     if (!q.length && !contextUri) return
     setStarted(true)
 
     if (inSdk) {
+      const uris = q.flatMap(t => t.spotifyUri ? [t.spotifyUri] : [])
+      const offset = q.slice(0, i).filter(t => t.spotifyUri).length
       if (contextUri) {
-        void spotifyRef.current!.startPlaybackContext(contextUri, i)
-      } else {
-        const uris = q.flatMap(t => t.spotifyUri ? [t.spotifyUri] : [])
-        if (uris.length) {
-          const offset = q.slice(0, i).filter(t => t.spotifyUri).length
+        void spotifyRef.current!.startPlaybackContext(contextUri, i).catch(() => {
+          if (!uris.length) { startLocalPlayback(q, i); return }
           const MAX = 300
           const window = [...uris.slice(offset), ...uris.slice(0, offset)].slice(0, MAX)
-          void spotifyRef.current!.startPlayback(window, 0)
+          void spotifyRef.current!.startPlayback(window, 0).catch(() => startLocalPlayback(q, i))
+        })
+      } else if (uris.length) {
+        const MAX = 300
+        const window = [...uris.slice(offset), ...uris.slice(0, offset)].slice(0, MAX)
+        void spotifyRef.current!.startPlayback(window, 0).catch(() => {
+          startLocalPlayback(q, i)
+        })
+      } else {
+        startLocalPlayback(q, i)
+      }
+      if (q.length) {
+        // Keep local queue for reference (display/fallback)
+        setLocalQueue(q)
+        setLocalIdx(i)
+        if (!uris.length) {
+          return
         }
       }
-      // Keep local queue for reference (display/fallback)
-      setLocalQueue(q)
-      setLocalIdx(i)
       return
     }
 
@@ -262,17 +303,8 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
       origQueueRef.current = []
     }
 
-    setLocalQueue(aq); setLocalIdx(ai); setLocalTime(0)
-    setLocalPlaying(true)
-
-    const t = aq[ai]
-    if (t?.previewUrl) {
-      const audio = audioRef.current
-      audio.src = t.previewUrl; audio.load()
-      gestureDidPlayRef.current = true
-      void audio.play()
-    }
-  }, [inSdk])
+    startLocalPlayback(aq, ai)
+  }, [inSdk, startLocalPlayback])
 
   const toggle = useCallback(() => {
     if (inSdk && spotifyRef.current?.player) {
@@ -292,6 +324,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     const nextIdx = (localIdxRef.current + 1) % queue.length
     const nextTrack = queue[nextIdx]
     if (nextTrack?.previewUrl) {
+      setLocalAudioDuration(0)
       audioRef.current.src = nextTrack.previewUrl
       audioRef.current.load()
       gestureDidPlayRef.current = true
@@ -307,6 +340,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     const prevIdx = (localIdxRef.current - 1 + queue.length) % queue.length
     const prevTrack = queue[prevIdx]
     if (prevTrack?.previewUrl) {
+      setLocalAudioDuration(0)
       audioRef.current.src = prevTrack.previewUrl
       audioRef.current.load()
       gestureDidPlayRef.current = true
@@ -316,15 +350,27 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   }, [inSdk, localTime])
 
   const seek = useCallback((fraction: number) => {
+    const clamped = Math.max(0, Math.min(1, fraction))
     if (inSdk) {
       // REST API — same as thirdparty's SongProgressBar
       const dur = s?.duration ?? 0
-      void seekToPosition(Math.round(fraction * dur))
+      const position = Math.round(clamped * dur)
+      sdkBaseRef.current = { position, timestamp: Date.now() }
+      setSdkTime(position / 1000)
+      void seekToPosition(position)
       return
     }
-    const t = fraction * (localQueue[localIdx]?.dur ?? 0)
-    setLocalTime(t); audioRef.current.currentTime = t
-  }, [inSdk, s, localQueue, localIdx])
+    const audio = audioRef.current
+    const audioDuration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : localAudioDuration
+    const dur = localEngine === 'audio' && audioDuration > 0 ? audioDuration : (localQueue[localIdx]?.dur ?? 0)
+    const t = clamped * dur
+    setLocalTime(t)
+    if (localEngine !== 'audio') return
+    try {
+      audio.currentTime = t
+      if (localPlayingRef.current && audio.paused && audio.src) void audio.play()
+    } catch {}
+  }, [inSdk, s, localQueue, localIdx, localAudioDuration, localEngine])
 
   const toggleFav = useCallback(() => {
     const uri = sdkLive ? s!.track_window.current_track.uri : localQueue[localIdxRef.current]?.spotifyUri
@@ -379,6 +425,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   useMediaSession({
     track,
     time,
+    duration,
     inSdk,
     onLocalPlay: mediaPlay,
     onLocalPause: mediaPause,
@@ -388,7 +435,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   })
 
   return {
-    track, upNext, playing, time, fav, shuffle, repeat, started,
+    track, upNext, playing, time, duration, fav, shuffle, repeat, started,
     prevDisabled, nextDisabled,
     queue: localQueue, idx: localIdx,
     play, toggle, next, prev, seek,

@@ -3,37 +3,73 @@ import { fmt } from '../data'
 import { Icons } from '../components/icons'
 import { ProgressBar, useSwipe } from '../components/Pivot'
 import { useLibrary } from '../LibraryContext'
+import { openContextMenu } from '../components/ContextMenu'
 
 interface Props {
   pb: PlaybackState
   onBack: () => void
+  controls?: 'top' | 'bottom'
 }
 
-export function Player({ pb, onBack }: Props) {
+export function Player({ pb, onBack, controls = 'top' }: Props) {
   const { track, upNext, playing, time, fav, shuffle, repeat,
-          prevDisabled, nextDisabled,
-          toggle, next, prev, seek, toggleFav, toggleShuffle, cycleRepeat } = pb
+          duration, prevDisabled, nextDisabled,
+           toggle, next, prev, seek, toggleFav, toggleShuffle, cycleRepeat } = pb
   const { likedTrackUris } = useLibrary()
 
   if (!track) return null
 
-  const pct = track.dur > 0 ? Math.min(100, (time / track.dur) * 100) : 0
+  const pct = duration > 0 ? Math.min(100, (time / duration) * 100) : 0
   const repeatState = repeat === 0 ? 'outline' : 'on'
   const isLiked = fav || Boolean(track.spotifyUri && likedTrackUris.has(track.spotifyUri))
   const swipe = useSwipe(onBack, () => {})
+  const tint = `radial-gradient(125% 95% at 28% 16%, ${track.color}66 0%, #0c0c0c 60%, #060606 100%)`
+
+  const transport = (
+    <div className={'transport' + (controls === 'bottom' ? ' bottom' : '')}>
+      <button
+        className={'tbtn' + (prevDisabled ? ' tbtn-disabled' : '')}
+        onClick={prevDisabled ? undefined : prev}
+        aria-label="Previous"
+      >
+        {Icons.prev}
+      </button>
+      <button className="tbtn mid" onClick={toggle} aria-label={playing ? 'Pause' : 'Play'}>
+        {playing ? Icons.pause : Icons.play}
+      </button>
+      <button
+        className={'tbtn' + (nextDisabled ? ' tbtn-disabled' : '')}
+        onClick={nextDisabled ? undefined : next}
+        aria-label="Next"
+      >
+        {Icons.next}
+      </button>
+    </div>
+  )
 
   return (
     <div className="np" ref={swipe}>
+      <div className="np-tint" style={{ background: tint }} />
+      {track.imageUrl && (
+        <div className="np-bg-slot">
+          <img src={track.imageUrl} alt="" />
+        </div>
+      )}
+      <div className="np-scrim" />
+      <div className={'np-content controls-' + controls}>
+        {controls === 'top' && transport}
 
-      <div className="np-body">
         <div className="meta swap" key={'m' + track.title}>
-          <div className="np-artist">{track.artist}</div>
-          <div className="np-album">{track.album}</div>
+          <div className="artist">{track.artist}</div>
+          <div className="album">{track.album}</div>
         </div>
 
         <div className="artrow">
-          <div className="art swap" key={'a' + track.title} style={{ background: track.color }}>
-            {track.imageUrl && <img src={track.imageUrl} alt="" decoding="async" />}
+          <div className="art">
+            <div className="art-color swap" key={'a' + track.title} style={{ background: track.color }} />
+            {track.imageUrl && (
+              <img className="art-img" src={track.imageUrl} alt="" decoding="async" />
+            )}
           </div>
           <div className="sideicons">
             <button className={'iconbtn ' + (isLiked ? 'on' : 'outline')} onClick={toggleFav} aria-label="Favourite">
@@ -51,10 +87,10 @@ export function Player({ pb, onBack }: Props) {
         <ProgressBar pct={pct} onSeek={seek} />
         <div className="times">
           <span className="elapsed">{fmt(time)}</span>
-          <span className="remain">{track.dur > 0 ? `-${fmt(track.dur - time)}` : ''}</span>
+          <span className="remain">{duration > 0 ? `-${fmt(duration - time)}` : ''}</span>
         </div>
 
-        <div className="np-track swap" key={'t' + track.title}>
+        <div className="track swap" key={'t' + track.title}>
           <div className="title">{track.title}</div>
           {upNext.length > 0 && (
             <div className="upnext">
@@ -62,35 +98,27 @@ export function Player({ pb, onBack }: Props) {
             </div>
           )}
         </div>
-      </div>
 
-      <div className="transport">
-        <button
-          className={'tbtn' + (prevDisabled ? ' tbtn-disabled' : '')}
-          onClick={prevDisabled ? undefined : prev}
-          aria-label="Previous"
-          aria-disabled={prevDisabled}
-        >
-          {Icons.prev}
-        </button>
-        <button className="tbtn mid" onClick={toggle} aria-label={playing ? 'Pause' : 'Play'}>
-          {playing ? Icons.pause : Icons.play}
-        </button>
-        <button
-          className={'tbtn' + (nextDisabled ? ' tbtn-disabled' : '')}
-          onClick={nextDisabled ? undefined : next}
-          aria-label="Next"
-          aria-disabled={nextDisabled}
-        >
-          {Icons.next}
-        </button>
-      </div>
+        {controls === 'bottom' && transport}
 
-      <div className="appbar">
-        <button className="iconbtn appback" onClick={onBack} aria-label="Back">{Icons.back}</button>
-        <button className="ellipsis" aria-label="More options">
-          <i /><i /><i />
-        </button>
+        <div className="appbar">
+          <button className="iconbtn appback" onClick={onBack} aria-label="Back">{Icons.back}</button>
+          <button
+            className="ellipsis"
+            aria-label="More options"
+            onClick={(e) => openContextMenu({
+              items: [
+                { label: isLiked ? 'remove from favourites' : 'add to favourites', onClick: toggleFav },
+                { label: 'share' },
+                { label: 'pin to start' },
+                { label: 'add to a playlist' },
+              ],
+              origin: { x: e.clientX, y: e.clientY },
+            })}
+          >
+            <i /><i /><i />
+          </button>
+        </div>
       </div>
     </div>
   )

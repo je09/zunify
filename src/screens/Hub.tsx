@@ -4,9 +4,10 @@ import { Icons } from '../components/icons'
 import { PlaybackState } from '../hooks/usePlayback'
 import { NowPlayingPane } from '../components/NowPlayingPane'
 import { useHubData } from './useHubData'
+import { openContextMenu } from '../components/ContextMenu'
 
 const MENU: [string, number][] = [
-  ['artists', 0], ['albums', 1], ['songs', 2], ['playlists', 3],
+  ['artists', 0], ['albums', 1], ['songs', 2], ['genres', 3], ['playlists', 4], ['radio', 5],
 ]
 
 interface Props {
@@ -16,10 +17,12 @@ interface Props {
   onOpenNowPlaying: () => void
   onOpenAlbum: (album: Album) => void
   onShuffle: () => void
-  onSettings: () => void
+  onChangeLooks: () => void
+  onConnectSpotify: () => void
+  spotify: boolean
 }
 
-export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onOpenAlbum, onShuffle, onSettings }: Props) {
+export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onOpenAlbum, onShuffle, onChangeLooks, onConnectSpotify, spotify }: Props) {
   const stripRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLDivElement>(null)
   const home = useHubData(token)
@@ -30,9 +33,19 @@ export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onOpenAlbum
     }
   }
 
+  const openMore = (e: React.MouseEvent) => {
+    openContextMenu({
+      items: [
+        { label: 'change looks', onClick: onChangeLooks },
+        { label: spotify ? 'spotify connected' : 'connect to spotify', onClick: onConnectSpotify },
+      ],
+      origin: { x: e.clientX, y: e.clientY },
+    })
+  }
+
   return (
-    <div className="hub theme-dark">
-      <div className="hub-bg" style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }} />
+    <div className="hub">
+      <div className="hub-bg" />
       <div className="hub-scrim" />
       <div className="pano-title" ref={titleRef}>music</div>
 
@@ -88,7 +101,6 @@ export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onOpenAlbum
             </div>
           </div>
         )}
-
       </div>
 
       <div className="appbar">
@@ -100,7 +112,7 @@ export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onOpenAlbum
             {Icons.search}
           </button>
         </div>
-        <button className="ellipsis" aria-label="Settings" onClick={onSettings}><i /><i /><i /></button>
+        <button className="ellipsis" aria-label="More" onClick={openMore}><i /><i /><i /></button>
       </div>
     </div>
   )

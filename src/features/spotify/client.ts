@@ -34,7 +34,8 @@ export async function spotifyRequest<T>(method: SpotifyMethod, path: string, bod
 
   if (!res.ok) throw new Error(`spotify_${res.status}`)
   const text = await res.text()
-  return (text ? JSON.parse(text) : undefined) as T
+  if (!text) return undefined as T
+  return (res.headers.get('Content-Type')?.includes('application/json') ? JSON.parse(text) : text) as T
 }
 
 export async function spotifyGet<T>(path: string): Promise<T> {

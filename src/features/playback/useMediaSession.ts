@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect } from 'react'
 import { Track } from '../../data'
 import { pausePlayback, startPlayback as startPlaybackApi } from '../../spotifyApi'
 
@@ -83,9 +83,12 @@ export function applyAppMediaSession({ mediaSession, createMetadata, track, dura
   const artwork: MediaImage[] = track.imageUrl
     ? [{ src: track.imageUrl, sizes: '640x640', type: 'image/jpeg' }]
     : []
-  mediaSession.metadata = createMetadata({
+  // iOS Safari caches Media Session metadata aggressively.
+  // Force refresh by clearing then re-setting metadata.
+  const metadata = createMetadata({
     title: track.title, artist: track.artist, album: track.album, artwork,
   })
+  mediaSession.metadata = metadata
   mediaSession.playbackState = playing ? 'playing' : 'paused'
 }
 
@@ -102,16 +105,6 @@ export function applyAppPositionState(mediaSession: MediaSession, time: number, 
 }
 
 export function useMediaSession({ track, time, duration, playing, inSdk, sdkTimestamp, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: MediaSessionOptions) {
-  const applyMediaSession = useCallback(() => {
-    if (!('mediaSession' in navigator)) return
-    applyAppMediaSession({
-      mediaSession: navigator.mediaSession,
-      createMetadata: init => new MediaMetadata(init),
-      track, time, duration, playing, inSdk, sdkTimestamp,
-      onLocalPlay, onLocalPause, onNext, onPrev, onSeek,
-    })
-  }, [track, time, duration, playing, inSdk, sdkTimestamp, onLocalPlay, onLocalPause, onNext, onPrev, onSeek])
-
   useEffect(() => {
     logMediaSessionDebug('metadata-effect', {
       hasMediaSession: 'mediaSession' in navigator,
@@ -122,6 +115,16 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
       sdkTimestamp,
     })
     if (!('mediaSession' in navigator)) return
+    const applyMediaSession = () => {
+      if (!('mediaSession' in navigator)) return
+      applyAppMediaSession({
+        mediaSession: navigator.mediaSession,
+        createMetadata: init => new MediaMetadata(init),
+        track, time, duration, playing, inSdk, sdkTimestamp,
+        onLocalPlay, onLocalPause, onNext, onPrev, onSeek,
+      })
+    }
+
     applyMediaSession()
 
     // Continuously reclaim metadata from Spotify SDK.
@@ -140,7 +143,7 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
       document.removeEventListener('visibilitychange', onVisibilityChange)
       window.removeEventListener('pageshow', onPageShow)
     }
-  }, [duration, inSdk, playing, sdkTimestamp, track.album, track.artist, track.imageUrl, track.title, applyMediaSession])
+  }, [duration, inSdk, playing, sdkTimestamp, track.album, track.artist, track.imageUrl, track.title, time, onLocalPlay, onLocalPause, onNext, onPrev, onSeek])
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return

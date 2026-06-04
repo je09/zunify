@@ -95,8 +95,12 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     const uri = sdkLive ? sdkCurrent?.uri : queue[idx]?.spotifyUri
     const id = uri?.split(':')[2]
     if (!id) { setFav(false); return }
-    checkSavedTracks([id]).then(([liked]) => setFav(!!liked)).catch(() => {})
-  }, [sdkLive, sdkCurrent?.id, queue, idx])
+    let live = true
+    checkSavedTracks([id]).then(([liked]) => {
+      if (live) setFav(!!liked)
+    }).catch(() => {})
+    return () => { live = false }
+  }, [sdkLive, sdkCurrent?.uri, queue, idx])
 
   useEffect(() => {
     if (!sdkLive || !s) return

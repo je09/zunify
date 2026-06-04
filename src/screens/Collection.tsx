@@ -73,7 +73,7 @@ function WP8Loading() {
           <span key={i} className="wp8-dot" style={{ animationDelay: `${i * 120}ms` }} />
         ))}
       </div>
-      <div className="wp8-label">zplayer</div>
+      <div className="wp8-label">zunify</div>
     </div>
   )
 }

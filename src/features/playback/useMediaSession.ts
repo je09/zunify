@@ -11,7 +11,7 @@ function logMediaSessionDebug(event: string, data: Record<string, unknown>) {
     || host.startsWith('192.168.')
     || host.startsWith('10.')
     || /^172\.(1[6-9]|2\d|3[01])\./.test(host)
-  const forced = window.localStorage.getItem('zplayer:media-session-debug') === '1'
+  const forced = window.localStorage.getItem('zunify:media-session-debug') === '1'
   if (!env?.DEV && !isPrivateHost && !forced) return
   console.log(`[media-session] ${event}`, data)
 }

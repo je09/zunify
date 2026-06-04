@@ -129,8 +129,11 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
     document.addEventListener('visibilitychange', onVisibilityChange)
     window.addEventListener('pageshow', onPageShow)
 
+    const interval = window.setInterval(applyMediaSession, 5000)
+
     return () => {
       timeouts.forEach(window.clearTimeout)
+      window.clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibilityChange)
       window.removeEventListener('pageshow', onPageShow)
     }

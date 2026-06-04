@@ -4,6 +4,7 @@ export interface Track {
   artist: string
   artistId?: string
   album: string
+  albumID?: string
   color: string
   imageUrl?: string
   previewUrl?: string

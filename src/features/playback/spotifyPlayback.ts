@@ -25,11 +25,16 @@ export function getSdkTrack(spotify: SpotifyEngine | null | undefined): Track | 
   const state = spotify?.sdkState
   const current = state?.track_window.current_track
   if (!state || !current) return null
+  const albumUri = current.album.uri
+  const albumID = albumUri ? albumUri.split(':').pop() : undefined
+  const artistId = current.artists[0]?.uri?.split(':').pop()
   return {
     title: current.name,
     dur: state.duration / 1000,
     artist: current.artists[0]?.name ?? '',
+    artistId,
     album: current.album.name,
+    albumID,
     color: '#555',
     imageUrl: current.album.images[0]?.url,
     spotifyUri: current.uri,

@@ -157,9 +157,35 @@ export function AppShell({ token, onLogout }: AppShellProps) {
       )
       break
 
-    case 'nowplaying':
-      body = <Player pb={pb} onBack={nav.back} controls={controls} />
+    case 'nowplaying': {
+      const track = pb.track
+      body = (
+        <Player
+          pb={pb}
+          onBack={nav.back}
+          controls={controls}
+          onGoToAlbum={track.albumID && track.artist ? () => {
+            const albumID = track.albumID as string
+            const lightAlbum: Album = {
+              id: albumID,
+              artist: track.artist,
+              title: track.album,
+              year: 0,
+              color: track.color,
+              imageUrl: track.imageUrl,
+              tracks: [],
+            }
+            nav.push({ screen: 'album', album: lightAlbum, tab: 0 })
+          } : undefined}
+          onGoToArtist={track.artist ? () => {
+            setTimeout(() => {
+              nav.push({ screen: 'artist', name: track.artist, artistId: track.artistId, tab: 0 })
+            }, 70)
+          } : undefined}
+        />
+      )
       break
+    }
   }
 
   return (

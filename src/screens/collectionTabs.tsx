@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Track, Album, ArtistSummary, Playlist, SongEntry, albumQueue } from '../data'
-import { Section, Thumb } from '../components/Pivot'
+import { Section, Thumb, WP8Spinner } from '../components/Pivot'
 import { Icons } from '../components/icons'
 
 export function hasMore(loaded: number, total: number | null): boolean {
@@ -62,7 +62,7 @@ function LoadMoreSentinel({ active, loading, onLoadMore }: { active: boolean; lo
     observer.observe(el)
     return () => observer.disconnect()
   }, [active, loading, onLoadMore])
-  return <div ref={ref} style={{ height: 80, color: '#888', paddingTop: 16 }}>{loading ? 'loading more...' : ''}</div>
+  return <div ref={ref} style={{ minHeight: 80 }}>{loading ? <WP8Spinner /> : null}</div>
 }
 
 export function ArtistsTab({ artists, albumsByArtist, artistIdByName, hasMore, loadingMore, onLoadMore, onOpenArtist, onPlay, onPlayArtist }: {

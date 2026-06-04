@@ -287,3 +287,26 @@ export function Thumb({ color, size, imageUrl }: ThumbProps) {
     ? <img className="thumb" src={imageUrl} alt="" style={imgStyle} loading="lazy" decoding="async" />
     : <div className="thumb" style={boxStyle} />
 }
+
+export function WP8Loading() {
+  return (
+    <div className="wp8-loading">
+      <div className="wp8-dots">
+        {[0, 1, 2, 3, 4].map(i => (
+          <span key={i} className="wp8-dot" style={{ animationDelay: `${i * 120}ms` }} />
+        ))}
+      </div>
+      <div className="wp8-label">zunify</div>
+    </div>
+  )
+}
+
+export function WP8Spinner() {
+  return (
+    <div className="wp8-spinner">
+      {[0, 1, 2].map(i => (
+        <span key={i} className="wp8-dot wp8-dot--sm" style={{ animationDelay: `${i * 160}ms` }} />
+      ))}
+    </div>
+  )
+}

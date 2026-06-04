@@ -1,5 +1,5 @@
 import { Track, Album, fmt } from '../data'
-import { Pivot, PivotArea, Overline, Thumb, useSwipe, BottomBack } from '../components/Pivot'
+import { Pivot, PivotArea, Overline, Thumb, useSwipe, BottomBack, WP8Spinner } from '../components/Pivot'
 import { Icons } from '../components/icons'
 import { useAlbumDetail } from './useAlbumDetail'
 
@@ -48,7 +48,7 @@ export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist
           </div>
 
           {fullAlbum.tracks.length === 0 && loadingEnrich ? (
-            <div style={{ color: 'var(--dim)', padding: '20px 26px' }}>loading tracks...</div>
+            <WP8Spinner />
           ) : (
             <div className="track-list">
               {fullAlbum.tracks.map(([title, dur], i) => {

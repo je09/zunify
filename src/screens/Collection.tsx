@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { Track, Album, Playlist } from '../data'
 import { useLibrary } from '../LibraryContext'
-import { Pivot, PivotArea, useSwipe, BottomBack } from '../components/Pivot'
+import { Pivot, PivotArea, useSwipe, BottomBack, WP8Loading } from '../components/Pivot'
 import { AlbumsTab, ArtistsTab, PlaylistsTab, SongsTab, GenresTab, RadioTab, groupAlbumsByArtist, hasMore } from './collectionTabs'
 
 const TABS = ['artists', 'albums', 'songs', 'genres', 'playlists', 'radio']
@@ -61,19 +61,6 @@ function WP8Error({ message }: { message: string }) {
       <div className="wp8-error-icon">!</div>
       <div className="wp8-error-title">something went wrong</div>
       <div className="wp8-error-msg">{message}</div>
-    </div>
-  )
-}
-
-function WP8Loading() {
-  return (
-    <div className="wp8-loading">
-      <div className="wp8-dots">
-        {[0, 1, 2, 3, 4].map(i => (
-          <span key={i} className="wp8-dot" style={{ animationDelay: `${i * 120}ms` }} />
-        ))}
-      </div>
-      <div className="wp8-label">zunify</div>
     </div>
   )
 }

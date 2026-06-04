@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Track, Album, ArtistSummary, fmt } from '../data'
 import { fetchArtist, fetchArtistTopTracks, fetchArtistAlbums, checkSavedTracks } from '../spotifyApi'
-import { Pivot, PivotArea, Overline, Thumb, useSwipe, BottomBack } from '../components/Pivot'
+import { Pivot, PivotArea, Overline, Thumb, useSwipe, BottomBack, WP8Spinner } from '../components/Pivot'
 import { Icons } from '../components/icons'
 
 interface Props {
@@ -104,7 +104,7 @@ return (
           {/* albums */}
           <div style={{ padding: '0 26px' }}>
             {loading ? (
-              <div style={{ color: 'var(--dim)', paddingTop: 20 }}>loading...</div>
+              <WP8Spinner />
             ) : (
               <>
                 {albums.length > 0 && (
@@ -143,7 +143,7 @@ return (
           {/* top songs */}
           <div>
             {loading ? (
-              <div style={{ color: 'var(--dim)', padding: '20px 26px' }}>loading...</div>
+              <WP8Spinner />
             ) : topTracks.map((t, i) => (
               <div key={t.spotifyUri ?? i} className="lrow" style={{ padding: '8px 26px' }}>
                 <button

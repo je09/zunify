@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Track, Playlist, playlistQueue, fmt } from '../data'
 import { checkSavedTracks, fetchRecommendations, saveTracks, removeTracks } from '../spotifyApi'
-import { useSwipe, BottomBack } from '../components/Pivot'
+import { useSwipe, BottomBack, WP8Spinner } from '../components/Pivot'
 import { useLibrary } from '../LibraryContext'
 import { Icons } from '../components/icons'
 
@@ -143,5 +143,5 @@ function LoadMoreTracks({ active, loading, onLoadMore }: { active: boolean; load
     observer.observe(el)
     return () => observer.disconnect()
   }, [active, loading, onLoadMore])
-  return <div ref={ref} style={{ height: 80, color: '#888', padding: '16px 26px 0' }}>{loading ? 'loading more...' : ''}</div>
+  return <div ref={ref} style={{ minHeight: 80 }}>{loading ? <WP8Spinner /> : null}</div>
 }

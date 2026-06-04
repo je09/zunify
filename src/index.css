@@ -597,6 +597,8 @@ body {
   40%           { transform: scale(1);   opacity: 1; }
 }
 .wp8-label { font-size: 20px; font-weight: 300; letter-spacing: 2px; color: #fff; text-transform: lowercase; opacity: 0.7; }
+.wp8-spinner { display: flex; gap: 10px; padding: 20px 26px; }
+.wp8-dot--sm { width: 8px; height: 8px; }
 .wp8-error-icon  { font-size: 64px; font-weight: 100; line-height: 1; color: var(--accent); }
 .wp8-error-title { font-size: 24px; font-weight: 300; letter-spacing: 1px; color: #fff; text-transform: lowercase; }
 .wp8-error-msg   { font-size: 13px; font-weight: 300; color: rgba(255,255,255,.5); max-width: 280px; text-align: center; line-height: 1.5; margin-top: 4px; }

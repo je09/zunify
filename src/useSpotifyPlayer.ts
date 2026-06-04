@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { getValidToken } from './features/auth/spotifyAuth'
 import { setShuffleState, startPlayback, transferPlayback } from './features/spotify/playerApi'
+import { mediaSessionReclaimRef } from './features/playback/useMediaSession'
 
 // ── Engine abstraction ────────────────────────────────────────────────────────
 
@@ -129,8 +130,9 @@ export function useSpotifyPlayer(
       player.addListener('player_state_changed', (state) => {
         if (!live) return
         setSdkState(state)
-        // Override the SDK iframe's ms-based setPositionState immediately with
-        // correct seconds so the top-level session wins the race on iOS lockscreen.
+        // Synchronously reclaim action handlers before SDK's postMessage
+        // re-registration arrives in the next event loop tick.
+        mediaSessionReclaimRef.current?.()
         if (state && 'mediaSession' in navigator && state.duration > 0) {
           const dur = state.duration / 1000
           const pos = Math.min(Math.max(0, state.position / 1000), dur)

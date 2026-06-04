@@ -172,12 +172,14 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     setIdx(i => queueRef.current.length ? (i + 1) % queueRef.current.length : 0)
   }, [])
 
+  const timeRef = useRef(time)
+  timeRef.current = time
   const prev = useCallback(() => {
-    if (time > 3) { setTime(0); void seekToPosition(0); return }
+    if (timeRef.current > 3) { setTime(0); void seekToPosition(0); return }
     void skipToPrevious()
     setTime(0)
     setIdx(i => queueRef.current.length ? (i - 1 + queueRef.current.length) % queueRef.current.length : 0)
-  }, [time])
+  }, [])
 
   const seek = useCallback((fraction: number) => {
     if (!Number.isFinite(fraction)) return

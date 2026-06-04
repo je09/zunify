@@ -104,6 +104,10 @@ export function applyAppPositionState(mediaSession: MediaSession, time: number, 
   } catch { /* old Safari */ }
 }
 
+// Synchronous reclaim: called by useSpotifyPlayer immediately after player_state_changed
+// so our handlers win before SDK's postMessage re-registration arrives.
+export const mediaSessionReclaimRef: { current: (() => void) | null } = { current: null }
+
 export function useMediaSession({ track, time, duration, playing, inSdk, sdkTimestamp, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: MediaSessionOptions) {
   useEffect(() => {
     logMediaSessionDebug('metadata-effect', {
@@ -126,6 +130,7 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
     }
 
     applyMediaSession()
+    mediaSessionReclaimRef.current = applyMediaSession
 
     // Continuously reclaim metadata from Spotify SDK.
     // Spotify overwrites navigator.mediaSession.metadata on every state change
@@ -138,12 +143,13 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
     window.addEventListener('pageshow', onPageShow)
 
     return () => {
+      mediaSessionReclaimRef.current = null
       timeouts.forEach(window.clearTimeout)
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibilityChange)
       window.removeEventListener('pageshow', onPageShow)
     }
-  }, [duration, inSdk, playing, sdkTimestamp, track.album, track.artist, track.imageUrl, track.title, time, onLocalPlay, onLocalPause, onNext, onPrev, onSeek])
+  }, [duration, inSdk, playing, sdkTimestamp, track.album, track.artist, track.imageUrl, track.title, onLocalPlay, onLocalPause, onNext, onPrev, onSeek])
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return

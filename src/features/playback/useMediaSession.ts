@@ -83,12 +83,18 @@ export function applyAppMediaSession({ mediaSession, createMetadata, track, dura
   const artwork: MediaImage[] = track.imageUrl
     ? [{ src: track.imageUrl, sizes: '640x640', type: 'image/jpeg' }]
     : []
-  // iOS Safari caches Media Session metadata aggressively.
-  // Force refresh by clearing then re-setting metadata.
-  const metadata = createMetadata({
-    title: track.title, artist: track.artist, album: track.album, artwork,
-  })
-  mediaSession.metadata = metadata
+  // Only replace metadata object when track identity changes — iOS re-fetches
+  // artwork on every metadata assignment, causing lockscreen flicker.
+  const currentMeta = mediaSession.metadata
+  if (
+    currentMeta?.title !== track.title ||
+    currentMeta?.artist !== track.artist ||
+    (currentMeta?.artwork?.[0]?.src ?? '') !== (track.imageUrl ?? '')
+  ) {
+    mediaSession.metadata = createMetadata({
+      title: track.title, artist: track.artist, album: track.album, artwork,
+    })
+  }
   mediaSession.playbackState = playing ? 'playing' : 'paused'
 }
 
@@ -132,11 +138,7 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
     applyMediaSession()
     mediaSessionReclaimRef.current = applyMediaSession
 
-    // Continuously reclaim metadata from Spotify SDK.
-    // Spotify overwrites navigator.mediaSession.metadata on every state change
-    // despite enableMediaSession: false. We apply faster than it does.
-    const interval = window.setInterval(applyMediaSession, 2000)
-    const timeouts = [100, 500, 1500].map(delay => window.setTimeout(applyMediaSession, delay))
+    // Re-apply on visibility/pageshow in case iOS clears session on resume.
     const onVisibilityChange = () => applyMediaSession()
     const onPageShow = () => applyMediaSession()
     document.addEventListener('visibilitychange', onVisibilityChange)
@@ -144,8 +146,6 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
 
     return () => {
       mediaSessionReclaimRef.current = null
-      timeouts.forEach(window.clearTimeout)
-      window.clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibilityChange)
       window.removeEventListener('pageshow', onPageShow)
     }

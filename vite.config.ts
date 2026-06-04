@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import svgr from 'vite-plugin-svgr'
 
 import { cloudflare } from "@cloudflare/vite-plugin";
 
@@ -8,7 +9,7 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_BUILD_DATE': JSON.stringify(new Date().toISOString()),
   },
-  plugins: [react(), VitePWA({
+  plugins: [svgr(), react(), VitePWA({
     registerType: 'autoUpdate',
     includeAssets: ['icons/*.svg'],
     manifest: {

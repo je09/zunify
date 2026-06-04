@@ -6,17 +6,6 @@ import { Icons } from '../../components/icons'
 const buildDateValue = (import.meta as unknown as { env?: { VITE_BUILD_DATE?: string } }).env?.VITE_BUILD_DATE
 const buildDate = buildDateValue ? new Date(buildDateValue).toLocaleString() : 'dev'
 
-// generic equalizer mark (not a trademarked logo)
-function ServiceMark() {
-  return (
-    <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
-      <rect x="3"  y="9"  width="3" height="6"  rx="1.5" fill="#fff" />
-      <rect x="8"  y="5"  width="3" height="14" rx="1.5" fill="#fff" />
-      <rect x="13" y="2"  width="3" height="20" rx="1.5" fill="#fff" />
-      <rect x="18" y="7"  width="3" height="10" rx="1.5" fill="#fff" />
-    </svg>
-  )
-}
 
 interface Props {
   token: string | null
@@ -49,7 +38,7 @@ export function Settings({ token, sdkError, onClearSdkError, onLogout, onClose }
     <div className="overlay-screen">
       <div className="page ov-spotify">
         <div className="sp-head">
-          <div className="sp-mark"><ServiceMark /></div>
+          <div className="sp-mark">{Icons.serviceMark}</div>
           <div className="sp-service">Spotify</div>
         </div>
 

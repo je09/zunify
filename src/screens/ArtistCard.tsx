@@ -92,9 +92,7 @@ return (
               onClick={() => onPlay(topTracks, 0)}
               aria-label={`Play ${displayName}`}
             >
-              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-                <path d="M7 5.5v13L19 12z" fill="currentColor" />
-              </svg>
+              {Icons.play}
               <span>play</span>
             </button>
           </div>

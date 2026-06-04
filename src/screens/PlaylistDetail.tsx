@@ -54,9 +54,7 @@ export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
         <div style={{ padding: '10px 26px 0' }}>
           <div className="screen-heading">{current.name}</div>
           <button className="al-playall" style={{ marginBottom: 8 }} onClick={() => onPlay(queue, 0, contextUri)}>
-            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-              <path d="M7 5.5v13L19 12z" fill="currentColor" />
-            </svg>
+            {Icons.play}
             <span>play all</span>
           </button>
         </div>

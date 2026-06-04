@@ -64,15 +64,21 @@ export function AppShell({ token, onLogout }: AppShellProps) {
           onOpenAlbum={(album) => nav.push({ screen: 'album', album, tab: 0 })}
           onShuffle={() => {
             const liked = playlists.find(p => p.id === 'sp_liked')?.tracks ?? []
-            void setShuffleState(true)
+            const playTarget = () => {
+              if (liked.length) {
+                playAndGo(liked, 0)
+              } else if (userId) {
+                playAndGo([], 0, `spotify:user:${userId}:collection`)
+              }
+            }
+            void setShuffleState(true, spotifyEngine?.deviceId)
               .catch(() => {})
               .then(() => {
-                if (liked.length) {
-                  const shuffled = [...liked].sort(() => Math.random() - 0.5)
-                  playAndGo(shuffled, 0)
-                } else if (userId) {
-                  playAndGo([], 0, `spotify:user:${userId}:collection`)
-                }
+                playTarget()
+                setTimeout(() => {
+                  void setShuffleState(true, spotifyEngine?.deviceId)
+                    .catch(e => setSdkError(`Spotify shuffle failed: ${e instanceof Error ? e.message : String(e)}`))
+                }, 500)
               })
           }}
           onChangeLooks={() => setOverlay('looks')}

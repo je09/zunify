@@ -33,7 +33,7 @@ export async function fetchUserPlaylistsPage(cursor = `/me/playlists?limit=${LIB
 
 export async function fetchPlaylistTracksPage(playlistId: string, cursor?: string | null): Promise<SpotifyPage<Track>> {
   const page = await spotifyPage<{ track: SpTrack | null }>(
-    cursor ?? `/playlists/${playlistId}/tracks?limit=${TRACK_BATCH_LIMIT}&fields=items(track(uri,name,duration_ms,preview_url,artists,album(name,images))),next,total`
+    cursor ?? `/playlists/${playlistId}/tracks?limit=${TRACK_BATCH_LIMIT}&fields=items(track(type,uri,name,duration_ms,preview_url,artists,album(id,name,images,artists))),next,total`
   )
   return {
     items: page.items.map(({ track }) => mapTrack(track)).filter((t): t is Track => t !== null),

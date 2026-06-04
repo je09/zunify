@@ -149,7 +149,7 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
       document.removeEventListener('visibilitychange', onVisibilityChange)
       window.removeEventListener('pageshow', onPageShow)
     }
-  }, [duration, inSdk, playing, track.album, track.artist, track.imageUrl, track.title, onLocalPlay, onLocalPause, onNext, onPrev, onSeek])
+  }, [duration, inSdk, playing, sdkTimestamp, time, track, onLocalPlay, onLocalPause, onNext, onPrev, onSeek])
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return

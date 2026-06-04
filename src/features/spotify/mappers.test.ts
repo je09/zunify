@@ -42,8 +42,13 @@ describe('spotify mappers', () => {
       dur: 123,
       artist: 'Artist',
       album: 'Album',
+      albumID: 'album-1',
       spotifyUri: 'spotify:track:track-1',
     })
+  })
+
+  it('ignores non-track playback items', () => {
+    expect(mapTrack({ type: 'episode' } as SpTrack)).toBeNull()
   })
 
   it('maps artist genres', () => {

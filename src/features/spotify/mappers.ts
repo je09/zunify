@@ -36,12 +36,14 @@ export function mapArtist(a: SpFullArtist): ArtistSummary {
 
 export function mapTrack(t: SpTrack | null): Track | null {
   if (!t) return null
+  if (t.type && t.type !== 'track') return null
   return {
     title: t.name,
     dur: Math.round(t.duration_ms / 1000),
     artist: t.artists?.[0]?.name ?? 'Unknown',
     artistId: t.artists?.[0]?.id,
     album: t.album?.name ?? 'Unknown',
+    albumID: t.album?.id,
     color: '#555',
     imageUrl: t.album?.images?.[0]?.url,
     previewUrl: t.preview_url ?? undefined,

@@ -13,6 +13,11 @@ let backoffUntil = 0
 const waitQueue: Array<() => void> = []
 
 function drainQueue() {
+  const remaining = backoffUntil - Date.now()
+  if (remaining > 0) {
+    setTimeout(drainQueue, remaining + 10)
+    return
+  }
   while (inflight < MAX_CONCURRENT && waitQueue.length > 0) {
     inflight++
     waitQueue.shift()!()
@@ -42,6 +47,10 @@ function setBackoff(ms: number) {
 
 function spotifyUrl(path: string, params?: SpotifyParams): string {
   const url = new URL(path.startsWith('http') ? path : `${SPOTIFY_API_BASE}${path}`)
+  const base = new URL(SPOTIFY_API_BASE)
+  if (url.origin !== base.origin || !url.pathname.startsWith('/v1/')) {
+    throw new Error('spotify_invalid_url')
+  }
   if (params) {
     Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, String(value)))
   }

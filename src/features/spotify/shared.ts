@@ -24,6 +24,6 @@ export function mapPlaylistSummary(pl: SpSimplePlaylist): Playlist {
     imageUrl: pl.images?.[0]?.url,
     tracks: [],
     totalTracks: pl.tracks.total,
-    trackNextUrl: `/playlists/${pl.id}/tracks?limit=${TRACK_BATCH_LIMIT}&fields=items(track(uri,name,duration_ms,preview_url,artists,album(name,images))),next,total`,
+    trackNextUrl: `/playlists/${pl.id}/tracks?limit=${TRACK_BATCH_LIMIT}&fields=items(track(type,uri,name,duration_ms,preview_url,artists,album(id,name,images,artists))),next,total`,
   }
 }

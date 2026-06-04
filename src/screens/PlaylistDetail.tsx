@@ -15,6 +15,7 @@ export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
   const { playlists, loadingMore, loadMorePlaylistTracks } = useLibrary()
   const current = playlists.find(pl => pl.id === playlist.id) ?? playlist
   const queue = playlistQueue(current)
+  const queueIds = queue.map(t => t.spotifyUri ?? `${t.artist}:${t.title}`).join('\u0000')
   const swipe = useSwipe(onBack, () => {})
 
   const isSpotifyPlaylist = current.id !== 'sp_liked' && queue.some(t => t.spotifyUri)
@@ -27,15 +28,16 @@ export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
   }, [current.id, current.trackNextUrl, queue.length, loadingMore.playlistTracks, loadMorePlaylistTracks])
 
   useEffect(() => {
-    if (!queue.length) return
+    if (!queue.length) { setSavedIds(new Set()); return }
     const ids = queue.map(t => t.spotifyUri?.split(':')[2]).filter(Boolean) as string[]
-    if (!ids.length) return
+    if (!ids.length) { setSavedIds(new Set()); return }
 
+    let cancelled = false
     checkSavedTracks(ids)
-      .then(saved => setSavedIds(new Set(ids.filter((_, i) => saved[i]))))
+      .then(saved => { if (!cancelled) setSavedIds(new Set(ids.filter((_, i) => saved[i]))) })
       .catch(() => {})
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playlist.id, queue.length])
+    return () => { cancelled = true }
+  }, [queueIds, queue])
 
   return (
     <div className="page">

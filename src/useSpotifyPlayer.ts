@@ -34,12 +34,21 @@ function loadSdk(): Promise<void> {
   if (sdkPromise) return sdkPromise;
   if (window.Spotify) return (sdkPromise = Promise.resolve());
   sdkPromise = new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      sdkPromise = null;
+      reject(new Error("Spotify Web Playback SDK timed out"));
+    }, 15000);
     window.onSpotifyWebPlaybackSDKReady = resolve;
     const s = document.createElement("script");
     s.src = "https://sdk.scdn.co/spotify-player.js";
     s.onerror = () => {
+      window.clearTimeout(timeout);
       sdkPromise = null;
       reject(new Error("Spotify Web Playback SDK failed to load"));
+    };
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      window.clearTimeout(timeout);
+      resolve();
     };
     document.head.appendChild(s);
   });

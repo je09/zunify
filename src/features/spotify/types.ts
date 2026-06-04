@@ -1,6 +1,7 @@
 export interface SpImage { url: string }
 export interface SpArtist { id: string; name: string }
 export interface SpTrack {
+  type?: string
   uri: string
   name: string
   duration_ms: number

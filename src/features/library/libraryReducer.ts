@@ -63,11 +63,12 @@ export function libraryReducer(state: LibraryState, action: LibraryAction): Libr
 
     case 'append-playlists': {
       const userPlaylists = state.playlists.filter(p => p.id !== 'sp_liked')
-      const liked = state.playlists.find(p => p.id === 'sp_liked') ?? likedSongsPlaylist([])
+      const existingLiked = state.playlists.find(p => p.id === 'sp_liked')
+      const liked = existingLiked ?? likedSongsPlaylist([])
       const nextLiked = {
         ...liked,
         totalTracks: action.likedTotal ?? liked.totalTracks,
-        trackNextUrl: liked.trackNextUrl ?? '/me/tracks?limit=50',
+        trackNextUrl: existingLiked ? liked.trackNextUrl : '/me/tracks?limit=50',
       }
       const playlists = [nextLiked, ...mergePlaylists(userPlaylists, action.items)]
       const totals: LibraryTotals = { ...state.totals, songs: action.likedTotal ?? state.totals.songs, playlists: action.total ?? state.totals.playlists }
@@ -87,5 +88,5 @@ export function libraryReducer(state: LibraryState, action: LibraryAction): Libr
 }
 
 function keepTransientState(state: LibraryState, next: LibraryState): LibraryState {
-  return { ...next, loading: state.loading, loadingMore: state.loadingMore, error: state.error }
+  return { ...next, loading: state.loading, loadingMore: state.loadingMore, error: null }
 }

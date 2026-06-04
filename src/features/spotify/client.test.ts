@@ -59,4 +59,36 @@ describe('spotify client', () => {
     await expect(result).resolves.toEqual({ ok: true })
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
+
+  it('rejects absolute URLs outside Spotify API', async () => {
+    mockedGetValidToken.mockResolvedValue('token')
+
+    await expect(spotifyRequest('GET', 'https://example.com/v1/me')).rejects.toThrow('spotify_invalid_url')
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('does not release queued requests during 429 backoff', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('3000-01-01T00:00:00Z'))
+    mockedGetValidToken.mockResolvedValue('token')
+    const fetchMock = vi.mocked(fetch)
+    fetchMock
+      .mockResolvedValueOnce(new Response('', { status: 429, headers: { 'Retry-After': '1' } }))
+      .mockImplementation(() => Promise.resolve(new Response('{"ok":true}', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })))
+
+    const requests = [0, 1, 2, 3].map(() => spotifyRequest<{ ok: boolean }>('GET', '/me'))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+
+    await vi.advanceTimersByTimeAsync(500)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+
+    await vi.advanceTimersByTimeAsync(510)
+    await Promise.all(requests)
+    expect(fetchMock).toHaveBeenCalledTimes(5)
+  })
 })

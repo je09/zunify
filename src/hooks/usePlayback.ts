@@ -65,6 +65,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
 
   const s = spotify?.sdkState
   const sdkLive = spotify != null && s != null
+  const sdkPaused = s?.paused
   const sdkCurrent = sdkLive ? s!.track_window.current_track : null
   const track = getSdkTrack(spotify) ?? queue[idx] ?? NULL_TRACK
   const playing = sdkLive ? !s!.paused : remotePlaying
@@ -121,13 +122,13 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   }, [sdkLive, s])
 
   useEffect(() => {
-    if (!sdkLive || !s || s.paused) return
+    if (!sdkLive || sdkPaused) return
     const id = setInterval(() => {
       const b = sdkBaseRef.current
       setTime((b.position + (Date.now() - b.timestamp)) / 1000)
     }, 500)
     return () => clearInterval(id)
-  }, [sdkLive, s?.paused])
+  }, [sdkLive, sdkPaused])
 
   const play = useCallback((q: Track[], i: number, contextUri?: string) => {
     const command = buildSpotifyPlayCommand(q, i, contextUri)

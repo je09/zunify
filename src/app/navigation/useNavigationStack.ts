@@ -21,9 +21,12 @@ export function useNavigationStack<T>(initial: T): NavigationState<T> {
   }, [])
 
   const back = useCallback(() => {
-    setDirection('back')
-    setStack(prev => prev.length > 1 ? prev.slice(0, -1) : prev)
-    setKey(prev => prev + 1)
+    setStack(prev => {
+      if (prev.length <= 1) return prev
+      setDirection('back')
+      setKey(k => k + 1)
+      return prev.slice(0, -1)
+    })
   }, [])
 
   const updateCurrent = useCallback((update: (frame: T) => T) => {

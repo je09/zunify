@@ -59,7 +59,7 @@ function albumsFromLiked(tracks: Track[]): Album[] {
       existing.spotifyTrackPreviews?.push(t.previewUrl)
     } else {
       map.set(key, {
-        id: key, artist: t.artist, artistId: t.artistId, title: t.album,
+        id: t.albumID ?? key, artist: t.artist, artistId: t.artistId, title: t.album,
         year: 0, color: t.color, imageUrl: t.imageUrl,
         tracks: [[t.title, t.dur]],
         spotifyTrackUris: [t.spotifyUri ?? ''],

@@ -45,7 +45,7 @@ describe('libraryReducer', () => {
     })
 
     expect(next.loading).toBe(true)
-    expect(next.error).toBe('previous')
+    expect(next.error).toBeNull()
     expect(next.loadingMore).toEqual(loadingMore)
     expect(next.albums.map(a => a.id)).toEqual(['a1'])
   })
@@ -64,6 +64,21 @@ describe('libraryReducer', () => {
 
     expect(next.loadingMore.playlistTracks.p1).toBe(true)
     expect(next.playlists[0].tracks?.map(t => t.title)).toEqual(['one'])
+    expect(next.playlists[0].trackNextUrl).toBeNull()
+  })
+
+  it('does not restart completed liked-track pagination when playlists append', () => {
+    const next = libraryReducer(state({
+      playlists: [{ id: 'sp_liked', name: 'liked songs', items: [], tracks: [], trackNextUrl: null }],
+    }), {
+      type: 'append-playlists',
+      items: [playlist('p1')],
+      total: 1,
+      likedTotal: undefined,
+      userId: 'user',
+      followedArtists: [],
+    })
+
     expect(next.playlists[0].trackNextUrl).toBeNull()
   })
 })

@@ -49,6 +49,7 @@ export function albumQueue(a: Album): Track[] {
     artist: a.artist,
     artistId: a.artistId,
     album: a.title,
+    albumID: a.id,
     color: a.color,
     imageUrl: a.imageUrl,
     previewUrl: a.spotifyTrackPreviews?.[i],

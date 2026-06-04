@@ -30,10 +30,12 @@ export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPl
   })
 
   useEffect(() => {
+    setState({
+      artist: null, topTracks: [], albums: [], singles: [],
+      savedTrackIds: new Set(), loading: Boolean(artistId),
+    })
     if (!artistId) return
     let cancelled = false
-
-    setState(prev => ({ ...prev, loading: true }))
 
     // Wave 1: artist info + top tracks + albums + singles in parallel
     Promise.all([

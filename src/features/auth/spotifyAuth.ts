@@ -141,7 +141,18 @@ function persist(access: string, refresh: string, expiresIn: number): void {
 
 function load(): Tokens | null {
   const raw = localStorage.getItem(TOKEN_KEY)
-  return raw ? (JSON.parse(raw) as Tokens) : null
+  if (!raw) return null
+  try {
+    const tokens = JSON.parse(raw) as Partial<Tokens>
+    if (typeof tokens.access !== 'string' || typeof tokens.refresh !== 'string' || typeof tokens.expiresAt !== 'number') {
+      clearTokens()
+      return null
+    }
+    return tokens as Tokens
+  } catch {
+    clearTokens()
+    return null
+  }
 }
 
 export function getAccessToken(): string | null {

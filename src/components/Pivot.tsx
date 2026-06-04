@@ -1,4 +1,4 @@
-import { useRef, useLayoutEffect, useState, useCallback, Children, ReactNode, forwardRef } from 'react'
+import { useRef, useLayoutEffect, useState, useCallback, useEffect, Children, ReactNode, forwardRef } from 'react'
 import { Icons } from './icons'
 
 // ── PivotArea — sliding tab transition (both tabs visible during animation) ───
@@ -176,8 +176,19 @@ interface ProgressBarProps {
 
 export function ProgressBar({ pct, onSeek, onPreviewSeek, onPreviewEnd }: ProgressBarProps) {
   const barRef   = useRef<HTMLDivElement>(null)
+  const touchRef = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
   const [dragPct, setDragPct] = useState<number | null>(null)
+
+  useEffect(() => {
+    const el = touchRef.current
+    if (!el) return
+    const claim = (e: TouchEvent) => {
+      if (dragging.current) e.preventDefault()
+    }
+    el.addEventListener('touchmove', claim, { passive: false })
+    return () => el.removeEventListener('touchmove', claim)
+  }, [])
 
   const getFraction = (e: React.PointerEvent) => {
     if (!barRef.current) return null
@@ -188,6 +199,7 @@ export function ProgressBar({ pct, onSeek, onPreviewSeek, onPreviewEnd }: Progre
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation()
+    e.preventDefault()
     e.currentTarget.setPointerCapture(e.pointerId)
     dragging.current = true
     const f = getFraction(e)
@@ -198,6 +210,8 @@ export function ProgressBar({ pct, onSeek, onPreviewSeek, onPreviewEnd }: Progre
   }
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging.current) return
+    e.stopPropagation()
+    e.preventDefault()
     const f = getFraction(e)
     if (f !== null) {
       setDragPct(f * 100)
@@ -206,6 +220,8 @@ export function ProgressBar({ pct, onSeek, onPreviewSeek, onPreviewEnd }: Progre
   }
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging.current) return
+    e.stopPropagation()
+    e.preventDefault()
     dragging.current = false
     const f = getFraction(e)
     setDragPct(null)
@@ -222,6 +238,7 @@ export function ProgressBar({ pct, onSeek, onPreviewSeek, onPreviewEnd }: Progre
       {/* touch-action:none prevents iOS from treating horizontal drag as back gesture */}
       <div
         className="bar-touch"
+        ref={touchRef}
         style={{ touchAction: 'none' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}

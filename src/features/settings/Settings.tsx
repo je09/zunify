@@ -3,6 +3,9 @@ import { getClientId, getRedirectUri, setClientId } from '../../spotifyConfig'
 import { startLogin } from '../auth/spotifyAuth'
 import { Icons } from '../../components/icons'
 
+const buildDateValue = (import.meta as unknown as { env?: { VITE_BUILD_DATE?: string } }).env?.VITE_BUILD_DATE
+const buildDate = buildDateValue ? new Date(buildDateValue).toLocaleString() : 'dev'
+
 // generic equalizer mark (not a trademarked logo)
 function ServiceMark() {
   return (
@@ -72,6 +75,7 @@ export function Settings({ token, sdkError, onClearSdkError, onLogout, onClose }
                 <button className="sp-btn ghost" onClick={onLogout}>disconnect</button>
                 <button className="sp-btn ghost" onClick={onClose}>done</button>
               </div>
+              <div className="sp-foot">build: {buildDate}</div>
             </>
           ) : (
             <>
@@ -114,6 +118,7 @@ export function Settings({ token, sdkError, onClearSdkError, onLogout, onClose }
                 </button>
                 <button className="sp-btn ghost" onClick={onClose}>cancel</button>
               </div>
+              <div className="sp-foot">build: {buildDate}</div>
               <div className="sp-foot">you can revoke access anytime in settings</div>
             </>
           )}

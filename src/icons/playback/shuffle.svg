@@ -1,8 +1,3 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">
-  <g fill="none" fill-rule="evenodd" stroke="currentColor">
-    <path stroke="currentColor" stroke-width="2" d="M2.7 17.8q4.7-1.2 6.3-2a11 11 0 0 0 4.1-3.4q1.8-2.3 1.6-8"/>
-    <path fill="currentColor" d="M17.6 4.7h-5.9l2.8-3z"/>
-    <path stroke="currentColor" stroke-width="2" d="M17 17.8q-4.6-1.2-6.2-2a11 11 0 0 1-4.2-3.4Q4.8 10.1 5 4.1"/>
-    <path fill="currentColor" d="M2.1 4.7h6l-2.8-3z"/>
-  </g>
+  <path d="m14.9.1 5 4.6h-3.6q0 6-2 8.8-.9 1.2-2.1 2.2l.3.2 6 1.8-.6 2.2-1.3-.4a36 36 0 0 1-6.6-2.4l-.7.4q-1.8.9-7.2 2.4l-.5-2.2.8-.2q3.8-1 5.4-1.8-1.2-1-2.1-2.2-2-2.7-2-8.8H.2l5-4.6 4.2 4.6H5.9q0 5.4 1.5 7.4 1 1.4 2.6 2.4a10 10 0 0 0 2.6-2.4q1.5-2 1.5-7.4h-3.5z"/>
 </svg>

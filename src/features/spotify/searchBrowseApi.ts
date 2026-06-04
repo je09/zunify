@@ -41,29 +41,8 @@ export async function fetchArtistTopTracks(id: string): Promise<Track[]> {
 
 
 export async function fetchNewReleases(limit = 20): Promise<Album[]> {
-  const data: { artists: SpPaged<SpFullArtist> } = await spotifyGet(`/me/following?type=artist&limit=${limit}`)
-  const artists = data.artists.items.map(mapArtist)
-  if (artists.length === 0) return []
-
-  const pages = await Promise.allSettled(
-    artists.map(a =>
-      spotifyGet<SpPaged<SpSimpleAlbum2>>(
-        `/artists/${a.id}/albums?include_groups=album,single&limit=1`
-      )
-    )
-  )
-  const raw = pages.flatMap(r => r.status === 'fulfilled' ? r.value.items : [])
-
-  const seen = new Set<string>()
-  return raw
-    .sort((a, b) => (b.release_date ?? '').localeCompare(a.release_date ?? ''))
-    .filter(a => {
-      if (seen.has(a.id)) return false
-      seen.add(a.id)
-      return true
-    })
-    .slice(0, limit)
-    .map(mapSimpleAlbum)
+  const data = await spotifyGet<{ albums: SpPaged<SpSimpleAlbum2> }>(`/browse/new-releases?limit=${limit}`)
+  return data.albums.items.map(mapSimpleAlbum)
 }
 
 export async function fetchRecommendations(params: {

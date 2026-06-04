@@ -5,7 +5,7 @@ import { useNavigationStack } from './navigation/useNavigationStack'
 import { useSpotifyPlayer } from '../useSpotifyPlayer'
 import { useLibrary } from '../LibraryContext'
 import { Album, Playlist, Track } from '../data'
-import { fetchArtistTopTracks, setShuffleState } from '../spotifyApi'
+import { fetchArtistTopTracks, setShuffleState, startPlayback } from '../spotifyApi'
 import { Hub } from '../screens/Hub'
 import { Collection } from '../screens/Collection'
 import { ArtistCard } from '../screens/ArtistCard'
@@ -36,7 +36,7 @@ export function AppShell({ token, onLogout }: AppShellProps) {
   const spotifyEngine = useSpotifyPlayer(Boolean(token), onLogout, setSdkError)
   const pb = usePlayback(spotifyEngine)
   const theme = useTheme()
-  const { playlists, userId } = useLibrary()
+  const { userId } = useLibrary()
 
   const nav = useNavigationStack<NavFrame>({ screen: 'home' })
   const [overlay, setOverlay] = useState<Overlay>(null)
@@ -80,22 +80,24 @@ export function AppShell({ token, onLogout }: AppShellProps) {
           onOpenNowPlaying={() => nav.push({ screen: 'nowplaying' })}
           onOpenAlbum={(album) => nav.push({ screen: 'album', album, tab: 0 })}
           onShuffle={() => {
-            const liked = playlists.find(p => p.id === 'sp_liked')?.tracks ?? []
+            const contextUri = userId ? `spotify:user:${userId}:collection` : undefined
             const playTarget = () => {
-              if (liked.length) {
-                playAndGo(liked, 0)
-              } else if (userId) {
-                playAndGo([], 0, `spotify:user:${userId}:collection`)
-              }
+              if (!contextUri) return Promise.resolve()
+              artistPlayRequestRef.current += 1
+              nav.push({ screen: 'nowplaying' })
+              return startPlayback({ context_uri: contextUri }, spotifyEngine?.deviceId)
             }
             void setShuffleState(true, spotifyEngine?.deviceId)
               .catch(() => {})
               .then(() => {
-                playTarget()
-                setTimeout(() => {
-                  void setShuffleState(true, spotifyEngine?.deviceId)
-                    .catch(e => setSdkError(`Spotify shuffle failed: ${e instanceof Error ? e.message : String(e)}`))
-                }, 500)
+                void playTarget()
+                  .then(() => {
+                    setTimeout(() => {
+                      void setShuffleState(true, spotifyEngine?.deviceId)
+                        .catch(e => setSdkError(`Spotify shuffle failed: ${e instanceof Error ? e.message : String(e)}`))
+                    }, 500)
+                  })
+                  .catch(e => setSdkError(`Spotify playback failed: ${e instanceof Error ? e.message : String(e)}`))
               })
           }}
           onChangeLooks={() => setOverlay('looks')}

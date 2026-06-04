@@ -41,8 +41,41 @@ export async function fetchArtistTopTracks(id: string): Promise<Track[]> {
 
 
 export async function fetchNewReleases(limit = 20): Promise<Album[]> {
-  const data = await spotifyGet<{ albums: SpPaged<SpSimpleAlbum2> }>(`/browse/new-releases?limit=${limit}`)
-  return data.albums.items.map(mapSimpleAlbum)
+  const artists = await fetchFollowedArtists()
+  if (artists.length === 0) return []
+
+  const cutoff = new Date()
+  cutoff.setMonth(cutoff.getMonth() - 6)
+  const cutoffStr = cutoff.toISOString().slice(0, 10)
+
+  const BATCH = 5
+  const raw: SpSimpleAlbum2[] = []
+
+  for (let i = 0; i < artists.length; i += BATCH) {
+    const batch = artists.slice(i, i + BATCH)
+    const pages = await Promise.allSettled(
+      batch.map(a =>
+        spotifyGet<SpPaged<SpSimpleAlbum2>>(
+          `/artists/${a.id}/albums?include_groups=album,single&limit=10`
+        )
+      )
+    )
+    for (const result of pages) {
+      if (result.status === 'fulfilled') raw.push(...result.value.items)
+    }
+  }
+
+  const seen = new Set<string>()
+  return raw
+    .filter(a => (a.release_date ?? '') >= cutoffStr)
+    .sort((a, b) => (b.release_date ?? '').localeCompare(a.release_date ?? ''))
+    .filter(a => {
+      if (seen.has(a.id)) return false
+      seen.add(a.id)
+      return true
+    })
+    .slice(0, limit)
+    .map(mapSimpleAlbum)
 }
 
 export async function fetchRecommendations(params: {

@@ -76,7 +76,7 @@ export function useSpotifyPlayer(
 
       const player = new window.Spotify.Player({
         name: 'zPlayer',
-        enableMediaSession: true,
+        enableMediaSession: false,
         getOAuthToken: (cb) => {
           void getValidToken().then(t => {
             if (t) { cb(t); return }

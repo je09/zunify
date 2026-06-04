@@ -33,6 +33,20 @@ function normalizeSeekTime(seekTime: number, duration: number) {
   return Math.min(Math.max(0, seekTime), duration)
 }
 
+function logMediaSessionDebug(event: string, data: Record<string, unknown>) {
+  const env = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env
+  if (typeof window === 'undefined') return
+  const host = window.location.hostname
+  const isPrivateHost = host === 'localhost'
+    || host === '127.0.0.1'
+    || host.startsWith('192.168.')
+    || host.startsWith('10.')
+    || /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  const forced = window.localStorage.getItem('zplayer:media-session-debug') === '1'
+  if (!env?.DEV && !isPrivateHost && !forced) return
+  console.log(`[media-session] ${event}`, data)
+}
+
 export function applyAppMediaSession({ mediaSession, createMetadata, track, duration, playing, inSdk, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: ApplyMediaSessionOptions) {
   setMediaSessionHandler(mediaSession, 'play', () => {
     if (inSdk) { void startPlaybackApi(); return }
@@ -49,6 +63,13 @@ export function applyAppMediaSession({ mediaSession, createMetadata, track, dura
   setMediaSessionHandler(mediaSession, 'seekto', e => {
     if (e.seekTime == null) return
     const seekTime = normalizeSeekTime(e.seekTime, duration)
+    logMediaSessionDebug('seekto', {
+      rawSeekTime: e.seekTime,
+      duration,
+      normalizedSeekTime: seekTime,
+      fraction: seekTime == null ? null : seekTime / duration,
+      wasInflated: e.seekTime > duration && e.seekTime / 1000 <= duration,
+    })
     if (seekTime != null) onSeek(seekTime / duration)
   })
   setMediaSessionHandler(mediaSession, 'seekbackward', null)
@@ -68,8 +89,28 @@ export function applyAppMediaSession({ mediaSession, createMetadata, track, dura
   mediaSession.playbackState = playing ? 'playing' : 'paused'
 }
 
+export function applyAppPositionState(mediaSession: MediaSession, time: number, duration: number) {
+  if (!duration) return
+  const position = Math.min(Math.max(0, time), duration)
+  logMediaSessionDebug('position-state', { time, duration, position })
+  try {
+    mediaSession.setPositionState({
+      duration, playbackRate: 1,
+      position,
+    })
+  } catch { /* old Safari */ }
+}
+
 export function useMediaSession({ track, time, duration, playing, inSdk, sdkTimestamp, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: MediaSessionOptions) {
   useEffect(() => {
+    logMediaSessionDebug('metadata-effect', {
+      hasMediaSession: 'mediaSession' in navigator,
+      title: track.title,
+      duration,
+      playing,
+      inSdk,
+      sdkTimestamp,
+    })
     if (!('mediaSession' in navigator)) return
     const applyMediaSession = () => {
       if (!('mediaSession' in navigator)) return
@@ -96,12 +137,14 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
   }, [duration, inSdk, onLocalPause, onLocalPlay, onNext, onPrev, onSeek, playing, sdkTimestamp, track.album, track.artist, track.imageUrl, track.title])
 
   useEffect(() => {
-    if (!('mediaSession' in navigator) || !duration) return
-    try {
-      navigator.mediaSession.setPositionState({
-        duration, playbackRate: 1,
-        position: Math.min(Math.max(0, time), duration),
-      })
-    } catch { /* old Safari */ }
+    if (!('mediaSession' in navigator)) {
+      logMediaSessionDebug('position-skip', { reason: 'no-media-session', time, duration })
+      return
+    }
+    if (!duration) {
+      logMediaSessionDebug('position-skip', { reason: 'no-duration', time, duration })
+      return
+    }
+    applyAppPositionState(navigator.mediaSession, time, duration)
   }, [duration, time])
 }

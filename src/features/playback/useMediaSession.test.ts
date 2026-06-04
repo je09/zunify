@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Track } from '../../data'
-import { applyAppMediaSession } from './useMediaSession'
+import { applyAppMediaSession, applyAppPositionState } from './useMediaSession'
 
 const track: Track = {
   title: 'Correct Track',
@@ -87,5 +87,107 @@ describe('applyAppMediaSession', () => {
     expect(onSeek).toHaveBeenCalledWith(0.5)
     expect(handlers.seekbackward).toBeNull()
     expect(handlers.seekforward).toBeNull()
+  })
+
+  it('uses normal lockscreen seek times when already in seconds', () => {
+    const handlers: Partial<Record<MediaSessionAction, MediaSessionActionHandler | null>> = {}
+    const onSeek = vi.fn()
+    const mediaSession = {
+      metadata: null as MediaMetadata | null,
+      playbackState: 'none' as MediaSessionPlaybackState,
+      setActionHandler: vi.fn((action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+        handlers[action] = handler
+      }),
+    } as unknown as MediaSession
+
+    applyAppMediaSession({
+      mediaSession,
+      createMetadata: init => init as MediaMetadata,
+      track,
+      time: 0,
+      duration: track.dur,
+      playing: true,
+      inSdk: true,
+      onLocalPlay: vi.fn(),
+      onLocalPause: vi.fn(),
+      onNext: vi.fn(),
+      onPrev: vi.fn(),
+      onSeek,
+    })
+
+    handlers.seekto?.({ action: 'seekto', seekTime: 90 })
+
+    expect(onSeek).toHaveBeenCalledWith(0.5)
+  })
+
+  it('clamps impossible lockscreen seek times to track duration', () => {
+    const handlers: Partial<Record<MediaSessionAction, MediaSessionActionHandler | null>> = {}
+    const onSeek = vi.fn()
+    const mediaSession = {
+      metadata: null as MediaMetadata | null,
+      playbackState: 'none' as MediaSessionPlaybackState,
+      setActionHandler: vi.fn((action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+        handlers[action] = handler
+      }),
+    } as unknown as MediaSession
+
+    applyAppMediaSession({
+      mediaSession,
+      createMetadata: init => init as MediaMetadata,
+      track,
+      time: 0,
+      duration: track.dur,
+      playing: true,
+      inSdk: true,
+      onLocalPlay: vi.fn(),
+      onLocalPause: vi.fn(),
+      onNext: vi.fn(),
+      onPrev: vi.fn(),
+      onSeek,
+    })
+
+    handlers.seekto?.({ action: 'seekto', seekTime: 999_999_999 })
+
+    expect(onSeek).toHaveBeenCalledWith(1)
+  })
+})
+
+describe('applyAppPositionState', () => {
+  it('publishes Media Session position in seconds, not milliseconds', () => {
+    const mediaSession = {
+      setPositionState: vi.fn(),
+    } as unknown as MediaSession
+
+    applyAppPositionState(mediaSession, 17.85, 180)
+
+    expect(mediaSession.setPositionState).toHaveBeenCalledWith({
+      duration: 180,
+      playbackRate: 1,
+      position: 17.85,
+    })
+  })
+
+  it('clamps Media Session position into valid range', () => {
+    const mediaSession = {
+      setPositionState: vi.fn(),
+    } as unknown as MediaSession
+
+    applyAppPositionState(mediaSession, 300, 180)
+
+    expect(mediaSession.setPositionState).toHaveBeenCalledWith({
+      duration: 180,
+      playbackRate: 1,
+      position: 180,
+    })
+  })
+
+  it('does not publish invalid zero-duration position state', () => {
+    const mediaSession = {
+      setPositionState: vi.fn(),
+    } as unknown as MediaSession
+
+    applyAppPositionState(mediaSession, 10, 0)
+
+    expect(mediaSession.setPositionState).not.toHaveBeenCalled()
   })
 })

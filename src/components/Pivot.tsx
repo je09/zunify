@@ -112,6 +112,8 @@ export function useSwipe(onPrev: () => void, onNext: () => void) {
 
     // ── Touch (iOS PWA) ──────────────────────────────────────────────────────
     const onTouchStart = (e: TouchEvent) => {
+      const target = e.target
+      if (target instanceof HTMLElement && (target.closest('.progress') || target.classList.contains('progress'))) return
       start.touch = { x: e.touches[0].clientX, y: e.touches[0].clientY }
     }
     const onTouchMove = (e: TouchEvent) => {
@@ -135,7 +137,11 @@ export function useSwipe(onPrev: () => void, onNext: () => void) {
     const onTouchCancel = () => { start.touch = null }
 
     // ── Mouse (desktop) ──────────────────────────────────────────────────────
-    const onMouseDown = (e: MouseEvent) => { start.mouse = { x: e.clientX, y: e.clientY } }
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target
+      if (target instanceof HTMLElement && (target.closest('.progress') || target.classList.contains('progress'))) return
+      start.mouse = { x: e.clientX, y: e.clientY }
+    }
     const onMouseUp   = (e: MouseEvent) => {
       if (!start.mouse) return
       const dx = e.clientX - start.mouse.x

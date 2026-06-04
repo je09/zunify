@@ -17,8 +17,16 @@ interface MediaSessionOptions {
 export function useMediaSession({ track, time, duration, inSdk, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: MediaSessionOptions) {
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
-    navigator.mediaSession.setActionHandler('play', () => inSdk ? void startPlaybackApi() : onLocalPlay())
-    navigator.mediaSession.setActionHandler('pause', () => inSdk ? void pausePlayback() : onLocalPause())
+    navigator.mediaSession.setActionHandler('play', () => {
+      if (inSdk) { void startPlaybackApi(); return }
+      onLocalPlay()
+      void startPlaybackApi().catch(onLocalPause)
+    })
+    navigator.mediaSession.setActionHandler('pause', () => {
+      if (inSdk) { void pausePlayback(); return }
+      onLocalPause()
+      void pausePlayback().catch(onLocalPlay)
+    })
     navigator.mediaSession.setActionHandler('nexttrack', onNext)
     navigator.mediaSession.setActionHandler('previoustrack', onPrev)
     navigator.mediaSession.setActionHandler('seekto', e => {

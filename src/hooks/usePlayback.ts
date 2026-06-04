@@ -1,96 +1,69 @@
-// ---------------------------------------------------------------------------
-// Playback hook — two modes:
-//
-//   SDK    — Spotify Web Playback SDK active.
-//            ALL state read directly from sdkState (no local caching).
-//            ALL controls go through REST API (same as thirdparty).
-//            Shuffle/repeat/track/time owned by Spotify server.
-//
-//   Local  — No SDK (no login or no Spotify Premium).
-//            <audio> element for previewUrl, requestAnimationFrame otherwise.
-//            Shuffle/repeat managed client-side.
-// ---------------------------------------------------------------------------
-
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Track } from '../data'
 import type { SpotifyEngine } from '../useSpotifyPlayer'
 import type { PlaybackState, UpNextTrack } from '../features/playback/playbackTypes'
-import { NULL_TRACK, getLocalEngine, getLocalUpNext, shuffleQueueFrom } from '../features/playback/localPlayback'
-import { getSdkRepeatMode, getSdkTrack, getSdkUpNext } from '../features/playback/spotifyPlayback'
+import {
+  buildSpotifyPlayCommand,
+  getSdkRepeatMode,
+  getSdkTrack,
+  getSdkUpNext,
+} from '../features/playback/spotifyPlayback'
 import { useMediaSession } from '../features/playback/useMediaSession'
 import {
   setRepeatMode as setRepeatModeApi,
   checkSavedTracks, saveTracks, removeTracks,
   fetchCurrentPlayback, fetchUserQueue,
-  skipToNext, skipToPrevious, seekToPosition, setShuffleState,
+  pausePlayback, skipToNext, skipToPrevious, seekToPosition, setShuffleState,
+  startPlayback as startPlaybackApi,
 } from '../spotifyApi'
 
 export type { PlaybackState, UpNextTrack } from '../features/playback/playbackTypes'
 
+const NULL_TRACK: Track = { title: '', dur: 0, artist: '', album: '', color: '#000' }
+
+function getQueuedUpNext(queue: Track[], idx: number): UpNextTrack[] {
+  if (queue.length <= 1) return []
+  return Array.from({ length: Math.min(5, queue.length - 1) }, (_, i) => {
+    const t = queue[(idx + i + 1) % queue.length]
+    return { title: t.title, artist: t.artist, imageUrl: t.imageUrl }
+  })
+}
+
 export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
-  // ── Local state — non-SDK mode only ──────────────────────────────────────
-  const [localQueue, setLocalQueue]     = useState<Track[]>([])
-  const [localIdx, setLocalIdx]         = useState(0)
-  const [localPlaying, setLocalPlaying] = useState(false)
-  const [localTime, setLocalTime]       = useState(0)
-  const [localShuffle, setLocalShuffle] = useState(false)
-  const [localRepeat, setLocalRepeat]   = useState<0 | 1 | 2>(0)
-  const [started, setStarted]           = useState(false)
-  const [fav, setFav]                   = useState(false)
-  const [sdkTime, setSdkTime]           = useState(0)
-  const [localAudioDuration, setLocalAudioDuration] = useState(0)
+  const [queue, setQueue] = useState<Track[]>([])
+  const [idx, setIdx] = useState(0)
+  const [remotePlaying, setRemotePlaying] = useState(false)
+  const [time, setTime] = useState(0)
+  const [remoteShuffle, setRemoteShuffle] = useState(false)
+  const [remoteRepeat, setRemoteRepeat] = useState<0 | 1 | 2>(0)
+  const [started, setStarted] = useState(false)
+  const [fav, setFav] = useState(false)
 
-  const audioRef   = useRef<HTMLAudioElement>(new Audio())
-  const rafRef     = useRef(0)
-  const lastRef    = useRef(0)
-
-  const localRepeatRef  = useRef<0 | 1 | 2>(0)
-  const localShuffleRef = useRef(false)
-  const localQueueRef   = useRef(localQueue)
-  const localIdxRef     = useRef(0)
-  const origQueueRef    = useRef<Track[]>([])
-  const spotifyRef      = useRef<SpotifyEngine | null | undefined>(undefined)
-  const localPlayingRef = useRef(false)
-  const favRef          = useRef(false)
-  const gestureDidPlayRef = useRef(false)
+  const spotifyRef = useRef<SpotifyEngine | null | undefined>(undefined)
+  const queueRef = useRef(queue)
+  const idxRef = useRef(idx)
+  const favRef = useRef(fav)
   const startupSyncRef = useRef(false)
-  const sdkBaseRef     = useRef<{ position: number; timestamp: number }>({ position: 0, timestamp: 0 })
+  const sdkBaseRef = useRef<{ position: number; timestamp: number }>({ position: 0, timestamp: 0 })
 
-  localRepeatRef.current  = localRepeat
-  localShuffleRef.current = localShuffle
-  localQueueRef.current   = localQueue
-  localIdxRef.current     = localIdx
-  spotifyRef.current      = spotify
-  localPlayingRef.current = localPlaying
-  favRef.current          = fav
+  spotifyRef.current = spotify
+  queueRef.current = queue
+  idxRef.current = idx
+  favRef.current = fav
 
-  // ── SDK state derivation ──────────────────────────────────────────────────
   const s = spotify?.sdkState
-  const inSdk = spotify != null
-  const sdkLive = inSdk && s != null
-
+  const sdkLive = spotify != null && s != null
   const sdkCurrent = sdkLive ? s!.track_window.current_track : null
-  const track: Track = getSdkTrack(spotify) ?? localQueue[localIdx] ?? NULL_TRACK
-
-  const playing = sdkLive ? !s!.paused : localPlaying
-  const time    = sdkLive ? sdkTime : localTime
-  const shuffle = sdkLive ? s!.shuffle : localShuffle
-  const repeat  = sdkLive ? getSdkRepeatMode(spotify) : localRepeat
-
-  const upNext: UpNextTrack[] = sdkLive
-    ? getSdkUpNext(spotify)
-    : getLocalUpNext(localQueue, localIdx)
-
-  const disallows   = sdkLive ? s!.disallows : null
+  const track = getSdkTrack(spotify) ?? queue[idx] ?? NULL_TRACK
+  const playing = sdkLive ? !s!.paused : remotePlaying
+  const shuffle = sdkLive ? s!.shuffle : remoteShuffle
+  const repeat = sdkLive ? getSdkRepeatMode(spotify) : remoteRepeat
+  const upNext = sdkLive ? getSdkUpNext(spotify) : getQueuedUpNext(queue, idx)
+  const disallows = sdkLive ? s!.disallows : null
   const prevDisabled = Boolean(disallows?.skipping_prev)
   const nextDisabled = Boolean(disallows?.skipping_next)
+  const duration = track.dur
 
-  const localEngine = getLocalEngine(localQueue[localIdx])
-  const duration = !sdkLive && localEngine === 'audio' && localAudioDuration > 0
-    ? localAudioDuration
-    : track.dur
-
-  // ── Startup: mirror active Spotify Connect playback without transfer ──────
   useEffect(() => {
     if (startupSyncRef.current) return
     startupSyncRef.current = true
@@ -102,15 +75,15 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     ])
       .then(([current, userQueue]) => {
         if (!live || spotifyRef.current?.sdkState || !current?.track) return
-        setLocalQueue([
+        setQueue([
           current.track,
           ...userQueue.queue.filter(t => t.spotifyUri !== current.track?.spotifyUri),
         ])
-        setLocalIdx(0)
-        setLocalTime(current.progressMs / 1000)
-        setLocalPlaying(current.isPlaying)
-        setLocalShuffle(current.shuffle)
-        setLocalRepeat(current.repeat)
+        setIdx(0)
+        setTime(current.progressMs / 1000)
+        setRemotePlaying(current.isPlaying)
+        setRemoteShuffle(current.shuffle)
+        setRemoteRepeat(current.repeat)
         setStarted(current.isPlaying)
       })
       .catch(() => {})
@@ -118,315 +91,115 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     return () => { live = false }
   }, [])
 
-  // ── SDK: check liked state when current track changes ─────────────────────
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!sdkLive) return
-    const id = sdkCurrent?.uri?.split(':')[2]
-    if (!id) return
+    const uri = sdkLive ? sdkCurrent?.uri : queue[idx]?.spotifyUri
+    const id = uri?.split(':')[2]
+    if (!id) { setFav(false); return }
     checkSavedTracks([id]).then(([liked]) => setFav(!!liked)).catch(() => {})
-  }, [sdkCurrent?.id])
+  }, [sdkLive, sdkCurrent?.id, queue, idx])
 
-  // ── SDK: sync time base on each state event ──────────────────────────────
   useEffect(() => {
     if (!sdkLive || !s) return
     sdkBaseRef.current = { position: s.position, timestamp: Date.now() }
-    setSdkTime(s.position / 1000)
-  }, [s]) // s reference changes on every player_state_changed
+    setTime(s.position / 1000)
+  }, [sdkLive, s])
 
-  // ── SDK: advance time locally while playing ───────────────────────────────
   useEffect(() => {
     if (!sdkLive || !s || s.paused) return
     const id = setInterval(() => {
       const b = sdkBaseRef.current
-      setSdkTime((b.position + (Date.now() - b.timestamp)) / 1000)
+      setTime((b.position + (Date.now() - b.timestamp)) / 1000)
     }, 500)
     return () => clearInterval(id)
   }, [sdkLive, s?.paused])
 
-  // ── Local audio: attach listeners once ────────────────────────────────────
-  useEffect(() => {
-    const audio = audioRef.current
-    const onTimeUpdate = () => setLocalTime(audio.currentTime)
-    const onDurationChange = () => {
-      const dur = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0
-      setLocalAudioDuration(dur)
-      if (dur > 0 && audio.currentTime > dur) audio.currentTime = dur
-    }
-    const onEnded = () => {
-      if (localRepeatRef.current === 2) { audio.currentTime = 0; void audio.play(); return }
-      const queue   = localQueueRef.current
-      const nextIdx = (localIdxRef.current + 1) % queue.length
-      const nextTrack = queue[nextIdx]
-      // Directly drive audio using refs — React effects are suspended on iOS
-      // when the app is backgrounded, so we can't rely on the src-sync effect.
-      if (nextTrack?.previewUrl) {
-        setLocalAudioDuration(0)
-        audio.src = nextTrack.previewUrl
-        audio.load()
-        gestureDidPlayRef.current = true  // prevent src-sync effect from overwriting on foreground
-        void audio.play()
-      }
-      setLocalIdx(nextIdx)
-      setLocalTime(0)
-    }
-    audio.addEventListener('timeupdate', onTimeUpdate)
-    audio.addEventListener('loadedmetadata', onDurationChange)
-    audio.addEventListener('durationchange', onDurationChange)
-    audio.addEventListener('ended', onEnded)
-    return () => {
-      audio.pause()
-      audio.removeEventListener('timeupdate', onTimeUpdate)
-      audio.removeEventListener('loadedmetadata', onDurationChange)
-      audio.removeEventListener('durationchange', onDurationChange)
-      audio.removeEventListener('ended', onEnded)
-      audio.src = ''
-    }
-  }, [])
-
-  // ── Local audio: update src on track change ───────────────────────────────
-  useEffect(() => {
-    const audio = audioRef.current
-    if (inSdk || localEngine !== 'audio') { audio.pause(); return }
-    if (gestureDidPlayRef.current) { gestureDidPlayRef.current = false; return }
-    const src = localQueue[localIdx]?.previewUrl ?? ''
-    setLocalAudioDuration(0)
-    audio.src = src
-    if (src) { audio.load(); if (localPlayingRef.current) void audio.play() }
-  }, [localQueue[localIdx]?.previewUrl, localEngine, localIdx, inSdk])
-
-  // ── Local audio: play/pause sync ─────────────────────────────────────────
-  useEffect(() => {
-    const audio = audioRef.current
-    if (inSdk || localEngine !== 'audio') return
-    if (localPlaying && audio.paused && audio.src) void audio.play()
-    if (!localPlaying && !audio.paused) audio.pause()
-  }, [localPlaying, localEngine, inSdk])
-
-  // ── Local RAF simulation ──────────────────────────────────────────────────
-  useEffect(() => {
-    const dur = localQueue[localIdx]?.dur ?? 0
-    if (inSdk || localEngine !== 'raf' || !localPlaying || dur <= 0) {
-      cancelAnimationFrame(rafRef.current); lastRef.current = 0; return
-    }
-    const step = (ts: number) => {
-      if (lastRef.current) {
-        setLocalTime(tm => {
-          const nt = tm + (ts - lastRef.current) / 1000
-          if (nt >= dur) {
-            if (localRepeatRef.current === 2) return 0
-            setLocalIdx(i => (i + 1) % localQueueRef.current.length)
-            return 0
-          }
-          return nt
-        })
-      }
-      lastRef.current = ts
-      rafRef.current = requestAnimationFrame(step)
-    }
-    rafRef.current = requestAnimationFrame(step)
-    return () => { cancelAnimationFrame(rafRef.current); lastRef.current = 0 }
-  }, [localPlaying, localEngine, localIdx, localQueue, inSdk])
-
-  // ── Local: prefetch next tracks ───────────────────────────────────────────
-  useEffect(() => {
-    if (inSdk) return
-    const nexts = Array.from({ length: Math.min(5, localQueue.length - 1) },
-      (_, i) => localQueue[(localIdx + i + 1) % localQueue.length])
-    const audios: HTMLAudioElement[] = []
-    nexts.forEach(t => {
-      if (t?.imageUrl) { const img = new Image(); img.src = t.imageUrl }
-      if (t?.previewUrl) {
-        const a = new Audio(); a.preload = 'metadata'; a.src = t.previewUrl; a.load(); audios.push(a)
-      }
-    })
-    return () => audios.forEach(a => { a.removeAttribute('src'); a.load() })
-  }, [localIdx, localQueue, inSdk])
-
-  // ── Callbacks ─────────────────────────────────────────────────────────────
-
-  const startLocalPlayback = useCallback((q: Track[], i: number) => {
-    setLocalQueue(q); setLocalIdx(i); setLocalTime(0)
-    setLocalPlaying(true)
-
-    const t = q[i]
-    if (t?.previewUrl) {
-      const audio = audioRef.current
-      setLocalAudioDuration(0)
-      audio.src = t.previewUrl; audio.load()
-      gestureDidPlayRef.current = true
-      void audio.play()
-    }
-  }, [])
-
   const play = useCallback((q: Track[], i: number, contextUri?: string) => {
-    if (!q.length && !contextUri) return
+    const command = buildSpotifyPlayCommand(q, i, contextUri)
+    if (!command) return
+
     setStarted(true)
+    setQueue(q)
+    setIdx(i)
+    setTime(0)
+    setRemotePlaying(true)
 
-    if (inSdk) {
-      const uris = q.flatMap(t => t.spotifyUri ? [t.spotifyUri] : [])
-      const offset = q.slice(0, i).filter(t => t.spotifyUri).length
-      if (contextUri) {
-        void spotifyRef.current!.startPlaybackContext(contextUri, i).catch(() => {
-          if (!uris.length) { startLocalPlayback(q, i); return }
-          const MAX = 300
-          const window = [...uris.slice(offset), ...uris.slice(0, offset)].slice(0, MAX)
-          void spotifyRef.current!.startPlayback(window, 0).catch(() => startLocalPlayback(q, i))
-        })
-      } else if (uris.length) {
-        const MAX = 300
-        const window = [...uris.slice(offset), ...uris.slice(0, offset)].slice(0, MAX)
-        void spotifyRef.current!.startPlayback(window, 0).catch(() => {
-          startLocalPlayback(q, i)
-        })
-      } else {
-        startLocalPlayback(q, i)
-      }
-      if (q.length) {
-        // Keep local queue for reference (display/fallback)
-        setLocalQueue(q)
-        setLocalIdx(i)
-        if (!uris.length) {
-          return
-        }
-      }
-      return
-    }
+    const engine = spotifyRef.current
+    const request = command.type === 'context'
+      ? engine
+        ? engine.startPlaybackContext(command.contextUri, command.offsetPosition)
+        : startPlaybackApi({ context_uri: command.contextUri, offset: { position: command.offsetPosition } })
+      : engine
+        ? engine.startPlayback(command.uris, command.offsetIndex)
+        : startPlaybackApi({ uris: command.uris, offset: { position: command.offsetIndex } })
 
-    // Local mode: pre-shuffle if needed
-    let aq = q, ai = i
-    if (localShuffleRef.current) {
-      origQueueRef.current = q
-      const shuffled = shuffleQueueFrom(q, i)
-      aq = shuffled.queue; ai = shuffled.idx
-    } else {
-      origQueueRef.current = []
-    }
-
-    startLocalPlayback(aq, ai)
-  }, [inSdk, startLocalPlayback])
+    void request.catch(() => setRemotePlaying(false))
+  }, [])
 
   const toggle = useCallback(() => {
-    if (inSdk && spotifyRef.current?.player) {
-      // Use SDK togglePlay — acts on local device directly, no active-device requirement
+    if (spotifyRef.current?.player) {
       void spotifyRef.current.player.togglePlay()
       return
     }
-    if (localEngine === 'audio') {
-      localPlayingRef.current ? audioRef.current.pause() : void audioRef.current.play()
+    if (remotePlaying) {
+      setRemotePlaying(false)
+      void pausePlayback().catch(() => setRemotePlaying(true))
+      return
     }
-    setLocalPlaying(p => !p)
-  }, [inSdk, s, localEngine])
+    setRemotePlaying(true)
+    void startPlaybackApi().catch(() => setRemotePlaying(false))
+  }, [remotePlaying])
 
   const next = useCallback(() => {
-    if (inSdk) { void skipToNext(); return }
-    const queue   = localQueueRef.current
-    const nextIdx = (localIdxRef.current + 1) % queue.length
-    const nextTrack = queue[nextIdx]
-    if (nextTrack?.previewUrl) {
-      setLocalAudioDuration(0)
-      audioRef.current.src = nextTrack.previewUrl
-      audioRef.current.load()
-      gestureDidPlayRef.current = true
-      if (localPlayingRef.current) void audioRef.current.play()
-    }
-    setLocalIdx(nextIdx); setLocalTime(0)
-  }, [inSdk])
+    void skipToNext()
+    setTime(0)
+    setIdx(i => queueRef.current.length ? (i + 1) % queueRef.current.length : 0)
+  }, [])
 
   const prev = useCallback(() => {
-    if (inSdk) { void skipToPrevious(); return }
-    if (localTime > 3) { setLocalTime(0); audioRef.current.currentTime = 0; return }
-    const queue   = localQueueRef.current
-    const prevIdx = (localIdxRef.current - 1 + queue.length) % queue.length
-    const prevTrack = queue[prevIdx]
-    if (prevTrack?.previewUrl) {
-      setLocalAudioDuration(0)
-      audioRef.current.src = prevTrack.previewUrl
-      audioRef.current.load()
-      gestureDidPlayRef.current = true
-      if (localPlayingRef.current) void audioRef.current.play()
-    }
-    setLocalIdx(prevIdx); setLocalTime(0)
-  }, [inSdk, localTime])
+    if (time > 3) { setTime(0); void seekToPosition(0); return }
+    void skipToPrevious()
+    setTime(0)
+    setIdx(i => queueRef.current.length ? (i - 1 + queueRef.current.length) % queueRef.current.length : 0)
+  }, [time])
 
   const seek = useCallback((fraction: number) => {
     const clamped = Math.max(0, Math.min(1, fraction))
-    if (inSdk) {
-      // REST API — same as thirdparty's SongProgressBar
-      const dur = s?.duration ?? 0
-      const position = Math.round(clamped * dur)
-      sdkBaseRef.current = { position, timestamp: Date.now() }
-      setSdkTime(position / 1000)
-      void seekToPosition(position)
-      return
-    }
-    const audio = audioRef.current
-    const audioDuration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : localAudioDuration
-    const dur = localEngine === 'audio' && audioDuration > 0 ? audioDuration : (localQueue[localIdx]?.dur ?? 0)
-    const t = clamped * dur
-    setLocalTime(t)
-    if (localEngine !== 'audio') return
-    try {
-      audio.currentTime = t
-      if (localPlayingRef.current && audio.paused && audio.src) void audio.play()
-    } catch {}
-  }, [inSdk, s, localQueue, localIdx, localAudioDuration, localEngine])
+    const position = Math.round(clamped * duration * 1000)
+    sdkBaseRef.current = { position, timestamp: Date.now() }
+    setTime(position / 1000)
+    void seekToPosition(position)
+  }, [duration])
 
   const toggleFav = useCallback(() => {
-    const uri = sdkLive ? s!.track_window.current_track.uri : localQueue[localIdxRef.current]?.spotifyUri
-    if (uri) {
-      const id = uri.split(':')[2]
-      if (!id) { setFav(v => !v); return }
-      const newFav = !favRef.current
-      setFav(newFav)
-      ;(newFav ? saveTracks([id]) : removeTracks([id])).catch(() => setFav(!newFav))
-      return
-    }
-    setFav(v => !v)
+    const uri = sdkLive ? s!.track_window.current_track.uri : queueRef.current[idxRef.current]?.spotifyUri
+    const id = uri?.split(':')[2]
+    if (!id) { setFav(v => !v); return }
+    const newFav = !favRef.current
+    setFav(newFav)
+    ;(newFav ? saveTracks([id]) : removeTracks([id])).catch(() => setFav(!newFav))
   }, [sdkLive, s])
 
   const toggleShuffle = useCallback(() => {
-    if (inSdk) {
-      void setShuffleState(!s?.shuffle)
-      return
-    }
-    setLocalShuffle(prev => {
-      const next = !prev
-      if (next) {
-        origQueueRef.current = localQueueRef.current
-        const shuffled = shuffleQueueFrom(localQueueRef.current, localIdxRef.current)
-        setLocalQueue(shuffled.queue); setLocalIdx(shuffled.idx)
-      } else {
-        const orig = origQueueRef.current
-        if (orig.length > 0) {
-          const cur = localQueueRef.current[localIdxRef.current]
-          const ni = orig.indexOf(cur)
-          setLocalQueue(orig); setLocalIdx(ni >= 0 ? ni : 0)
-          origQueueRef.current = []
-        }
-      }
-      return next
-    })
-  }, [inSdk, s])
+    const nextShuffle = !shuffle
+    setRemoteShuffle(nextShuffle)
+    void setShuffleState(nextShuffle, spotifyRef.current?.deviceId).catch(() => setRemoteShuffle(!nextShuffle))
+  }, [shuffle])
 
   const cycleRepeat = useCallback(() => {
-    if (inSdk) {
-      const cur = s?.repeat_mode ?? 0
-      const modes = ['off', 'context', 'track'] as const
-      void setRepeatModeApi(modes[((cur + 1) % 3) as 0 | 1 | 2])
-      return
-    }
-    setLocalRepeat(r => ((r + 1) % 3) as 0 | 1 | 2)
-  }, [inSdk, s])
+    const nextRepeat = ((repeat + 1) % 3) as 0 | 1 | 2
+    const modes = ['off', 'context', 'track'] as const
+    setRemoteRepeat(nextRepeat)
+    void setRepeatModeApi(modes[nextRepeat]).catch(() => setRemoteRepeat(repeat))
+  }, [repeat])
 
-  const mediaPlay = useCallback(() => setLocalPlaying(true), [])
-  const mediaPause = useCallback(() => setLocalPlaying(false), [])
+  const mediaPlay = useCallback(() => setRemotePlaying(true), [])
+  const mediaPause = useCallback(() => setRemotePlaying(false), [])
 
   useMediaSession({
     track,
     time,
     duration,
-    inSdk,
+    inSdk: sdkLive,
     onLocalPlay: mediaPlay,
     onLocalPause: mediaPause,
     onNext: next,
@@ -437,7 +210,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   return {
     track, upNext, playing, time, duration, fav, shuffle, repeat, started,
     prevDisabled, nextDisabled,
-    queue: localQueue, idx: localIdx,
+    queue, idx,
     play, toggle, next, prev, seek,
     toggleFav, toggleShuffle, cycleRepeat,
   }

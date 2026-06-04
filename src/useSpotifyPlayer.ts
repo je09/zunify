@@ -113,9 +113,8 @@ export function useSpotifyPlayer(
       })
 
       player.addListener('account_error', () => {
-        // Non-premium account: SDK can't do full-track playback; fall through
-        // to preview_url engine. Surface a visible message so the user knows.
-        onError?.('Spotify Premium required for full-track playback. Playing 30 s previews instead.')
+        // Non-premium account: SDK can't do full-track playback.
+        onError?.('Spotify Premium required for full-track playback.')
       })
 
       player.addListener('initialization_error', ({ message }) => {

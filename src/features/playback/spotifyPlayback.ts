@@ -2,6 +2,25 @@ import { Track } from '../../data'
 import type { SpotifyEngine } from '../../useSpotifyPlayer'
 import { UpNextTrack } from './playbackTypes'
 
+export type SpotifyPlayCommand =
+  | { type: 'context'; contextUri: string; offsetPosition: number }
+  | { type: 'uris'; uris: string[]; offsetIndex: number }
+
+export function buildSpotifyPlayCommand(queue: Track[], idx: number, contextUri?: string): SpotifyPlayCommand | null {
+  if (contextUri) return { type: 'context', contextUri, offsetPosition: Math.max(0, idx) }
+
+  const uris = queue.flatMap(t => t.spotifyUri ? [t.spotifyUri] : [])
+  if (!uris.length) return null
+
+  const offset = queue.slice(0, idx).filter(t => t.spotifyUri).length
+  const max = 300
+  return {
+    type: 'uris',
+    uris: [...uris.slice(offset), ...uris.slice(0, offset)].slice(0, max),
+    offsetIndex: 0,
+  }
+}
+
 export function getSdkTrack(spotify: SpotifyEngine | null | undefined): Track | null {
   const state = spotify?.sdkState
   const current = state?.track_window.current_track

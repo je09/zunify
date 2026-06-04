@@ -9,6 +9,7 @@ import {
   getSdkUpNext,
 } from '../features/playback/spotifyPlayback'
 import { useMediaSession } from '../features/playback/useMediaSession'
+import { claimAudioSession } from '../features/playback/silentAudio'
 import {
   setRepeatMode as setRepeatModeApi,
   checkSavedTracks, saveTracks, removeTracks,
@@ -132,6 +133,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     const command = buildSpotifyPlayCommand(q, i, contextUri)
     if (!command) return
 
+    claimAudioSession()
     setStarted(true)
     setQueue(q)
     setIdx(i)
@@ -152,6 +154,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   }, [])
 
   const toggle = useCallback(() => {
+    claimAudioSession()
     if (spotifyRef.current?.player) {
       void spotifyRef.current.player.activateElement()
       void spotifyRef.current.player.togglePlay()

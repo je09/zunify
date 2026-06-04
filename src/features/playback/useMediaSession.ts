@@ -1,6 +1,54 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { Track } from '../../data'
 import { pausePlayback, startPlayback as startPlaybackApi } from '../../spotifyApi'
+
+let installedSpy = false
+
+function logMediaSessionDebug(event: string, data: Record<string, unknown>) {
+  const env = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env
+  if (typeof window === 'undefined') return
+  const host = window.location.hostname
+  const isPrivateHost = host === 'localhost'
+    || host === '127.0.0.1'
+    || host.startsWith('192.168.')
+    || host.startsWith('10.')
+    || /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  const forced = window.localStorage.getItem('zplayer:media-session-debug') === '1'
+  if (!env?.DEV && !isPrivateHost && !forced) return
+  console.log(`[media-session] ${event}`, data)
+}
+
+function installMediaSessionSpy(ref: { current: () => void }) {
+  if (installedSpy) return
+  installedSpy = true
+
+  const proto = Object.getPrototypeOf(navigator.mediaSession)
+  const desc = Object.getOwnPropertyDescriptor(proto, 'metadata')
+
+  Object.defineProperty(navigator.mediaSession, 'metadata', {
+    get() { return desc?.get?.call(navigator.mediaSession) },
+    set(value) {
+      desc?.set?.call(navigator.mediaSession, value)
+      const title = (value as MediaMetadata & { title?: string })?.title ?? ''
+      if (title.includes('Spotify')) {
+        logMediaSessionDebug('spider-rewritten', { title })
+        try { ref.current() } catch {}
+      }
+    },
+    configurable: true,
+  })
+
+  const origSetPositionState = navigator.mediaSession.setPositionState
+  let positionStateApply = false
+  navigator.mediaSession.setPositionState = (...args: Parameters<typeof origSetPositionState>) => {
+    origSetPositionState(...args)
+    if (!positionStateApply) {
+      positionStateApply = true
+      positionStateApply = false
+      try { ref.current() } catch {}
+    }
+  }
+}
 
 interface MediaSessionOptions {
   track: Track
@@ -31,20 +79,6 @@ function normalizeSeekTime(seekTime: number, duration: number) {
   if (!Number.isFinite(seekTime) || !duration) return null
   if (seekTime > duration && seekTime / 1000 <= duration) return seekTime / 1000
   return Math.min(Math.max(0, seekTime), duration)
-}
-
-function logMediaSessionDebug(event: string, data: Record<string, unknown>) {
-  const env = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env
-  if (typeof window === 'undefined') return
-  const host = window.location.hostname
-  const isPrivateHost = host === 'localhost'
-    || host === '127.0.0.1'
-    || host.startsWith('192.168.')
-    || host.startsWith('10.')
-    || /^172\.(1[6-9]|2\d|3[01])\./.test(host)
-  const forced = window.localStorage.getItem('zplayer:media-session-debug') === '1'
-  if (!env?.DEV && !isPrivateHost && !forced) return
-  console.log(`[media-session] ${event}`, data)
 }
 
 export function applyAppMediaSession({ mediaSession, createMetadata, track, duration, playing, inSdk, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: ApplyMediaSessionOptions) {
@@ -102,6 +136,17 @@ export function applyAppPositionState(mediaSession: MediaSession, time: number, 
 }
 
 export function useMediaSession({ track, time, duration, playing, inSdk, sdkTimestamp, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: MediaSessionOptions) {
+  const ref = useRef<() => void>(() => {})
+  ref.current = () => {
+    if (!('mediaSession' in navigator)) return
+    applyAppMediaSession({
+      mediaSession: navigator.mediaSession,
+      createMetadata: init => new MediaMetadata(init),
+      track, time, duration, playing, inSdk, sdkTimestamp,
+      onLocalPlay, onLocalPause, onNext, onPrev, onSeek,
+    })
+  }
+
   useEffect(() => {
     logMediaSessionDebug('metadata-effect', {
       hasMediaSession: 'mediaSession' in navigator,
@@ -112,42 +157,19 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
       sdkTimestamp,
     })
     if (!('mediaSession' in navigator)) return
-    const applyMediaSession = () => {
-      if (!('mediaSession' in navigator)) return
-      applyAppMediaSession({
-        mediaSession: navigator.mediaSession,
-        createMetadata: init => new MediaMetadata(init),
-        track, time, duration, playing, inSdk, sdkTimestamp,
-        onLocalPlay, onLocalPause, onNext, onPrev, onSeek,
-      })
-    }
+    ref.current()
+    installMediaSessionSpy(ref)
 
-    applyMediaSession()
-    const timeouts = [100, 500, 1500].map(delay => window.setTimeout(applyMediaSession, delay))
-    const onVisibilityChange = () => applyMediaSession()
-    const onPageShow = () => applyMediaSession()
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    window.addEventListener('pageshow', onPageShow)
-
-    const interval = window.setInterval(applyMediaSession, 5000)
+    const timeouts = [100, 500, 1500].map(delay => window.setTimeout(ref.current, delay))
 
     return () => {
       timeouts.forEach(window.clearTimeout)
-      window.clearInterval(interval)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-      window.removeEventListener('pageshow', onPageShow)
     }
-  }, [duration, inSdk, onLocalPause, onLocalPlay, onNext, onPrev, onSeek, playing, sdkTimestamp, track.album, track.artist, track.imageUrl, track.title])
+  }, [duration, inSdk, playing, sdkTimestamp, track.album, track.artist, track.imageUrl, track.title])
 
   useEffect(() => {
-    if (!('mediaSession' in navigator)) {
-      logMediaSessionDebug('position-skip', { reason: 'no-media-session', time, duration })
-      return
-    }
-    if (!duration) {
-      logMediaSessionDebug('position-skip', { reason: 'no-duration', time, duration })
-      return
-    }
+    if (!('mediaSession' in navigator)) return
+    if (!duration) return
     applyAppPositionState(navigator.mediaSession, time, duration)
   }, [duration, time])
 }

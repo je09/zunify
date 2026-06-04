@@ -22,9 +22,9 @@ import serviceMarkRaw from '../icons/actions/service-mark.svg?raw'
 
 function Icon({ raw, width, height }: { raw: string; width?: number; height?: number }) {
   const svg = (width || height)
-    ? raw.replace('<svg ', `<svg width="${width ?? ''}" height="${height ?? ''}" `)
-    : raw
-  return <span style={{ display: 'contents' }} dangerouslySetInnerHTML={{ __html: svg }} />
+    ? raw.replace('<svg ', `<svg width="${width ?? ''}" height="${height ?? ''}" color="inherit" `)
+    : raw.replace('<svg ', '<svg color="inherit" ')
+  return <span className="icon" dangerouslySetInnerHTML={{ __html: svg }} />
 }
 
 export const Icons = {

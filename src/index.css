@@ -121,6 +121,8 @@ body {
 }
 .page-back:active { transform: scale(.88); }
 .page-back svg { width: 26px; height: 26px; }
+.icon { display: inline-flex; align-items: center; justify-content: center; color: inherit; line-height: 0; }
+.icon svg { color: inherit; flex: 0 0 auto; }
 
 /* ── Overline ─────────────────────────────────────────────────────────────── */
 .overline {
@@ -380,6 +382,7 @@ body {
   -webkit-tap-highlight-color: transparent; transition: transform .08s ease;
 }
 .al-playall:active { transform: scale(.95); }
+.al-playall .icon svg { width: 20px; height: 20px; display: block; }
 .track-list   { padding: 0 26px; }
 .al-track     { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); cursor: pointer; min-height: 48px; }
 .al-tnum      { width: 20px; color: var(--dim); font-size: 18px; flex-shrink: 0; }
@@ -424,6 +427,7 @@ body {
 .tbtn {
   width: 66px; height: 66px; border-radius: 50%;
   border: 2px solid var(--fg); background: transparent;
+  color: var(--fg);
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; opacity: .92;
   transition: transform .08s ease, opacity .15s ease;
@@ -454,6 +458,7 @@ body {
 .iconbtn {
   background: none; border: none; cursor: pointer; padding: 4px;
   width: 44px; height: 44px;
+  color: var(--fg);
   display: flex; align-items: center; justify-content: center;
   -webkit-tap-highlight-color: transparent;
   transition: transform .08s ease;
@@ -462,6 +467,7 @@ body {
 .iconbtn svg   { width: 30px; height: 30px; }
 .iconbtn svg path, .iconbtn svg polygon { fill: var(--fg); transition: fill .15s ease; }
 .iconbtn.outline svg path { fill: none; stroke: var(--fg); stroke-width: 1.8; }
+.iconbtn.on { color: var(--accent); }
 .iconbtn.on svg path, .iconbtn.on svg polygon { fill: var(--accent); stroke: var(--accent); }
 
 /* Track title + up next */

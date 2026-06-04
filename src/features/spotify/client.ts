@@ -5,20 +5,39 @@ export const SPOTIFY_API_BASE = 'https://api.spotify.com/v1'
 export type SpotifyMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
 export type SpotifyParams = Record<string, string | number | boolean>
 
-// Global concurrency limiter — max 3 in-flight Spotify requests at a time.
-// Prevents thundering-herd 429s when bulk-fetching (e.g. new-releases loop).
+// Global queue — max 3 in-flight + global backoff on 429.
+// One 429 pauses the entire queue until Retry-After expires.
 const MAX_CONCURRENT = 3
 let inflight = 0
+let backoffUntil = 0
 const waitQueue: Array<() => void> = []
 
+function drainQueue() {
+  while (inflight < MAX_CONCURRENT && waitQueue.length > 0) {
+    inflight++
+    waitQueue.shift()!()
+  }
+}
+
 function acquire(): Promise<void> {
+  const remaining = backoffUntil - Date.now()
+  if (remaining > 0) {
+    return new Promise(resolve =>
+      setTimeout(() => acquire().then(resolve), remaining + 10)
+    )
+  }
   if (inflight < MAX_CONCURRENT) { inflight++; return Promise.resolve() }
   return new Promise(resolve => waitQueue.push(resolve))
 }
 
 function release() {
-  const next = waitQueue.shift()
-  if (next) { next() } else { inflight-- }
+  inflight--
+  drainQueue()
+}
+
+function setBackoff(ms: number) {
+  backoffUntil = Math.max(backoffUntil, Date.now() + ms)
+  setTimeout(drainQueue, ms + 10)
 }
 
 function spotifyUrl(path: string, params?: SpotifyParams): string {
@@ -47,10 +66,10 @@ export async function spotifyRequest<T>(method: SpotifyMethod, path: string, bod
     })
 
     if (res.status === 429) {
+      const wait = Math.max(1, parseInt(res.headers.get('Retry-After') ?? String(2 ** attempt), 10))
+      setBackoff(wait * 1000)
       rel()
       if (attempt >= 4) throw new Error('spotify_rate_limited')
-      const wait = parseInt(res.headers.get('Retry-After') ?? String(2 ** attempt), 10)
-      await new Promise(r => setTimeout(r, wait * 1000))
       return spotifyRequest<T>(method, path, body, params, attempt + 1)
     }
 

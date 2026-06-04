@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { PlaybackState } from '../hooks/usePlayback'
 import { fmt } from '../data'
 import { Icons } from './icons'
@@ -10,7 +11,9 @@ interface Props {
 
 export function NowPlayingPane({ pb, onOpen }: Props) {
   const { track, playing, time, duration, shuffle, repeat, toggle, next, prev, seek, toggleShuffle, cycleRepeat } = pb
-  const pct = duration > 0 ? Math.min(100, (time / duration) * 100) : 0
+  const [previewTime, setPreviewTime] = useState<number | null>(null)
+  const displayTime = previewTime ?? time
+  const pct = duration > 0 ? Math.min(100, (displayTime / duration) * 100) : 0
 
   return (
     <div className="nowpane">
@@ -31,10 +34,15 @@ export function NowPlayingPane({ pb, onOpen }: Props) {
         </div>
       </div>
 
-      <ProgressBar pct={pct} onSeek={seek} />
+      <ProgressBar
+        pct={pct}
+        onSeek={f => { setPreviewTime(null); seek(f) }}
+        onPreviewSeek={f => setPreviewTime(f * duration)}
+        onPreviewEnd={() => setPreviewTime(null)}
+      />
       <div className="times">
-        <span className="elapsed">{fmt(time)}</span>
-        <span className="remain">-{fmt(duration - time)}</span>
+        <span className="elapsed">{fmt(displayTime)}</span>
+        <span className="remain">-{fmt(duration - displayTime)}</span>
       </div>
 
       <div className="track" onClick={onOpen}>

@@ -21,6 +21,17 @@ export type { PlaybackState, UpNextTrack } from '../features/playback/playbackTy
 
 const NULL_TRACK: Track = { title: '', dur: 0, artist: '', album: '', color: '#000' }
 
+function updateMediaSessionPosition(positionMs: number, duration: number) {
+  if (!('mediaSession' in navigator) || !duration) return
+  try {
+    navigator.mediaSession.setPositionState({
+      duration,
+      playbackRate: 1,
+      position: Math.min(Math.max(0, positionMs / 1000), duration),
+    })
+  } catch { /* old Safari */ }
+}
+
 function getQueuedUpNext(queue: Track[], idx: number): UpNextTrack[] {
   if (queue.length <= 1) return []
   return Array.from({ length: Math.min(5, queue.length - 1) }, (_, i) => {
@@ -169,10 +180,18 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   }, [time])
 
   const seek = useCallback((fraction: number) => {
+    if (!Number.isFinite(fraction)) return
     const clamped = Math.max(0, Math.min(1, fraction))
     const position = Math.round(clamped * duration * 1000)
     sdkBaseRef.current = { position, timestamp: Date.now() }
     setTime(position / 1000)
+    updateMediaSessionPosition(position, duration)
+
+    const player = spotifyRef.current?.player
+    if (player) {
+      void player.seek(position).catch(() => seekToPosition(position, spotifyRef.current?.deviceId))
+      return
+    }
     void seekToPosition(position)
   }, [duration])
 

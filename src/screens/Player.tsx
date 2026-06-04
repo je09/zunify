@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { PlaybackState } from '../hooks/usePlayback'
 import { fmt } from '../data'
 import { Icons } from '../components/icons'
@@ -16,10 +17,12 @@ export function Player({ pb, onBack, controls = 'top' }: Props) {
           duration, prevDisabled, nextDisabled,
            toggle, next, prev, seek, toggleFav, toggleShuffle, cycleRepeat } = pb
   const { likedTrackUris } = useLibrary()
+  const [previewTime, setPreviewTime] = useState<number | null>(null)
 
   if (!track) return null
 
-  const pct = duration > 0 ? Math.min(100, (time / duration) * 100) : 0
+  const displayTime = previewTime ?? time
+  const pct = duration > 0 ? Math.min(100, (displayTime / duration) * 100) : 0
   const repeatState = repeat === 0 ? 'outline' : 'on'
   const isLiked = fav || Boolean(track.spotifyUri && likedTrackUris.has(track.spotifyUri))
   const swipe = useSwipe(onBack, () => {})
@@ -84,10 +87,15 @@ export function Player({ pb, onBack, controls = 'top' }: Props) {
           </div>
         </div>
 
-        <ProgressBar pct={pct} onSeek={seek} />
+        <ProgressBar
+          pct={pct}
+          onSeek={f => { setPreviewTime(null); seek(f) }}
+          onPreviewSeek={f => setPreviewTime(f * duration)}
+          onPreviewEnd={() => setPreviewTime(null)}
+        />
         <div className="times">
-          <span className="elapsed">{fmt(time)}</span>
-          <span className="remain">{duration > 0 ? `-${fmt(duration - time)}` : ''}</span>
+          <span className="elapsed">{fmt(displayTime)}</span>
+          <span className="remain">{duration > 0 ? `-${fmt(duration - displayTime)}` : ''}</span>
         </div>
 
         <div className="track swap" key={'t' + track.title}>

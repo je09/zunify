@@ -170,9 +170,11 @@ export function useSwipe(onPrev: () => void, onNext: () => void) {
 interface ProgressBarProps {
   pct: number
   onSeek: (fraction: number) => void
+  onPreviewSeek?: (fraction: number) => void
+  onPreviewEnd?: () => void
 }
 
-export function ProgressBar({ pct, onSeek }: ProgressBarProps) {
+export function ProgressBar({ pct, onSeek, onPreviewSeek, onPreviewEnd }: ProgressBarProps) {
   const barRef   = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
   const [dragPct, setDragPct] = useState<number | null>(null)
@@ -180,6 +182,7 @@ export function ProgressBar({ pct, onSeek }: ProgressBarProps) {
   const getFraction = (e: React.PointerEvent) => {
     if (!barRef.current) return null
     const r = barRef.current.getBoundingClientRect()
+    if (r.width <= 0) return null
     return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width))
   }
 
@@ -188,21 +191,28 @@ export function ProgressBar({ pct, onSeek }: ProgressBarProps) {
     e.currentTarget.setPointerCapture(e.pointerId)
     dragging.current = true
     const f = getFraction(e)
-    if (f !== null) setDragPct(f * 100)
+    if (f !== null) {
+      setDragPct(f * 100)
+      onPreviewSeek?.(f)
+    }
   }
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging.current) return
     const f = getFraction(e)
-    if (f !== null) setDragPct(f * 100)
+    if (f !== null) {
+      setDragPct(f * 100)
+      onPreviewSeek?.(f)
+    }
   }
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging.current) return
     dragging.current = false
     const f = getFraction(e)
     setDragPct(null)
+    onPreviewEnd?.()
     if (f !== null) onSeek(f)
   }
-  const onPointerCancel = () => { dragging.current = false; setDragPct(null) }
+  const onPointerCancel = () => { dragging.current = false; setDragPct(null); onPreviewEnd?.() }
 
   const displayPct = dragPct !== null ? dragPct : pct
 

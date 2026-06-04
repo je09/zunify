@@ -98,7 +98,17 @@ export async function skipToPrevious(): Promise<void> {
   return spotifyMutate('POST', '/me/player/previous')
 }
 
-export async function seekToPosition(position_ms: number): Promise<void> {
+export async function seekToPosition(position_ms: number, deviceId?: string): Promise<void> {
+  if (deviceId) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const res = await spotifyDeviceRequest('PUT', '/me/player/seek', deviceId, undefined, { position_ms })
+      if (res.ok) return
+      if (res.status !== 404 || attempt === 2) throw new Error(`spotify_${res.status}`)
+      await transferPlayback(deviceId)
+      await new Promise(r => setTimeout(r, 500 * (attempt + 1)))
+    }
+    return
+  }
   return spotifyMutate('PUT', '/me/player/seek', undefined, { position_ms })
 }
 

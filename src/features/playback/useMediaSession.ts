@@ -80,12 +80,12 @@ export function useMediaSession({ track, time, duration, playing, inSdk, sdkTime
   }, [duration, inSdk, onLocalPause, onLocalPlay, onNext, onPrev, onSeek, playing, sdkTimestamp, track.album, track.artist, track.imageUrl, track.title])
 
   useEffect(() => {
-    if (!('mediaSession' in navigator) || !duration || inSdk) return
+    if (!('mediaSession' in navigator) || !duration) return
     try {
       navigator.mediaSession.setPositionState({
         duration, playbackRate: 1,
         position: Math.min(Math.max(0, time), duration),
       })
     } catch { /* old Safari */ }
-  }, [duration, inSdk, time])
+  }, [duration, time])
 }

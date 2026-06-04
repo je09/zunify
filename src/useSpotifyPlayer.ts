@@ -76,7 +76,7 @@ export function useSpotifyPlayer(
 
       const player = new window.Spotify.Player({
         name: 'zPlayer',
-        enableMediaSession: false,
+        enableMediaSession: true,
         getOAuthToken: (cb) => {
           void getValidToken().then(t => {
             if (t) { cb(t); return }
@@ -129,6 +129,13 @@ export function useSpotifyPlayer(
       player.addListener('player_state_changed', (state) => {
         if (!live) return
         setSdkState(state)
+        // Override the SDK iframe's ms-based setPositionState immediately with
+        // correct seconds so the top-level session wins the race on iOS lockscreen.
+        if (state && 'mediaSession' in navigator && state.duration > 0) {
+          const dur = state.duration / 1000
+          const pos = Math.min(Math.max(0, state.position / 1000), dur)
+          try { navigator.mediaSession.setPositionState({ duration: dur, playbackRate: 1, position: pos }) } catch {}
+        }
       })
 
       player.addListener('not_ready', () => {

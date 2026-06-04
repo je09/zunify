@@ -1,4 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
-  <path d="M7 7h9v2.6L20.5 5.6 16 1.6V4H4.5v6.5H7zM17 17H8v-2.6L3.5 18.4 8 22.4V20h11.5v-6.5H17z" fill="currentColor" />
-  <text x="12" y="14.5" font-size="7.5" font-weight="700" text-anchor="middle" fill="currentColor">1</text>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="20px" height="20px" viewBox="0 0 20 20" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>repeat1</title>
+    <g id="repeat1" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="Oval-Copy" transform="translate(1.722426, 1.023346)" stroke="currentColor">
+            <path fill="currentColor" d="M6,0.5 L6,5.7267318 L1.14660618,0.5 L6,0.5 Z" id="Rectangle"></path>
+        </g>
+        <text id="1" font-family="SegoeUI-Bold, Segoe UI" font-size="13" font-weight="bold" fill="currentColor">
+            <tspan x="11.9279247" y="11.4924094">1</tspan>
+        </text>
+        <path d="M3.0487178,20.6233265 C7.46496319,20.6233265 11.2613323,17.0952026 11.2613323,12.6789572 C11.2613323,8.26271185 7.68125804,4.68263761 3.26501265,4.68263761" id="Oval" stroke="currentColor" stroke-width="2.5" transform="translate(7.155025, 12.652982) rotate(137.000000) translate(-7.155025, -12.652982) "></path>
+    </g>
 </svg>

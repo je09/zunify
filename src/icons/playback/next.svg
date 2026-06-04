@@ -1,3 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
-  <path d="M15.6 6H18v12h-2.4zM4 6l10.4 6L4 18z" fill="currentColor" />
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="20px" height="20px" viewBox="0 0 20 20" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>next</title>
+    <g id="next" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g transform="translate(0.000000, 4.937325)" fill-rule="nonzero" id="Shape">
+            <path fill="currentColor" d="M17.550606,0 L20,0 L20,10.1253496 L17.550606,10.1253496 L17.550606,0 Z M0,0 L8.77530301,5.06267481 L0,10.1253496 L0,0 Z M8.77530301,0 L17.550606,5.06267481 L8.77530301,10.1253496 L8.77530301,0 Z"></path>
+        </g>
+    </g>
 </svg>

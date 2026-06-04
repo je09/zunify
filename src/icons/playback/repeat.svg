@@ -1,3 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
-  <path d="M7 7h9v2.6L20.5 5.6 16 1.6V4H4.5v6.5H7zM17 17H8v-2.6L3.5 18.4 8 22.4V20h11.5v-6.5H17z" fill="currentColor" />
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="20px" height="20px" viewBox="0 0 20 20" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>repeat</title>
+    <g id="repeat" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="Oval" transform="translate(-1.506326, -1.305964)">
+            <path stroke="currentColor" d="M11.067605,19.2529623 C15.4838503,19.2529623 19.2802194,15.7248384 19.2802194,11.308593 C19.2802194,6.89234758 15.7001452,3.31227334 11.2838998,3.31227334 C6.86765443,3.31227334 3.28758018,6.89234758 3.28758018,11.308593" stroke-width="2.5" transform="translate(11.283900, 11.282618) rotate(137.000000) translate(-11.283900, -11.282618) "></path>
+            <path fill="currentColor" d="M9.006326,2.80596414 L9.006326,8.03269594 L4.15293219,2.80596414 L9.006326,2.80596414 Z" id="Rectangle"></path>
+        </g>
+    </g>
 </svg>

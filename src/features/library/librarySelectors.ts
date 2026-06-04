@@ -1,4 +1,4 @@
-import { Album, ArtistSummary, Playlist, Track, buildArtists, buildSongs, artistIdByName as buildArtistIdMap } from '../../data'
+import { Album, ArtistSummary, Playlist, Track, buildSongs, artistIdByName as buildArtistIdMap } from '../../data'
 import { LibraryState, LibraryTotals } from './libraryTypes'
 
 export function likedSongsPlaylist(tracks: Track[], total?: number | null): Playlist {
@@ -25,15 +25,13 @@ export function buildLibrary(
   const idMap = buildArtistIdMap(albums)
   followedArtists.forEach(a => { if (!idMap.has(a.name)) idMap.set(a.name, a.id) })
 
-  const allArtistNames = [...new Set([
-    ...buildArtists(albums),
-    ...followedArtists.map(a => a.name),
-  ])].sort((x, y) =>
+  const allArtistNames = [...new Set(followedArtists.map(a => a.name))].sort((x, y) =>
     x.replace(/^the\s+/i, '').localeCompare(y.replace(/^the\s+/i, ''), 'en', { sensitivity: 'base' })
   )
 
   return {
     albums,
+    followedArtists,
     artists: allArtistNames,
     songs: buildSongs(songsAlbums),
     playlists,

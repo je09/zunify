@@ -31,7 +31,7 @@ export function mapSimpleAlbum(a: SpSimpleAlbum2): Album {
 }
 
 export function mapArtist(a: SpFullArtist): ArtistSummary {
-  return { id: a.id, name: a.name, imageUrl: a.images?.[0]?.url }
+  return { id: a.id, name: a.name, imageUrl: a.images?.[0]?.url, genres: a.genres }
 }
 
 export function mapTrack(t: SpTrack | null): Track | null {

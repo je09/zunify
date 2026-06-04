@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapAlbum, mapSimpleAlbum, mapTrack } from './mappers'
+import { mapAlbum, mapArtist, mapSimpleAlbum, mapTrack } from './mappers'
 import { SpAlbum, SpSimpleAlbum2, SpTrack } from './types'
 
 describe('spotify mappers', () => {
@@ -44,5 +44,16 @@ describe('spotify mappers', () => {
       album: 'Album',
       spotifyUri: 'spotify:track:track-1',
     })
+  })
+
+  it('maps artist genres', () => {
+    expect(mapArtist({
+      id: 'artist-1',
+      name: 'Artist',
+      genres: ['indie rock'],
+      popularity: 50,
+      images: [],
+      followers: { total: 10 },
+    })).toMatchObject({ id: 'artist-1', name: 'Artist', genres: ['indie rock'] })
   })
 })

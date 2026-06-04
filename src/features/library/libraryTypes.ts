@@ -1,4 +1,4 @@
-import { Album, Playlist, SongEntry } from '../../data'
+import { Album, ArtistSummary, Playlist, SongEntry } from '../../data'
 
 export type LibraryPageKind = 'albums' | 'playlists' | 'tracks'
 
@@ -17,6 +17,7 @@ export interface LibraryLoadingMore {
 
 export interface LibraryState {
   albums: Album[]
+  followedArtists: ArtistSummary[]
   artists: string[]
   songs: SongEntry[]
   playlists: Playlist[]
@@ -36,6 +37,7 @@ export interface Library extends LibraryState {
 
 export const EMPTY_LIBRARY_STATE: LibraryState = {
   albums: [],
+  followedArtists: [],
   artists: [],
   songs: [],
   playlists: [],

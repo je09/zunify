@@ -27,6 +27,7 @@ export interface ArtistSummary {
   id: string
   name: string
   imageUrl?: string
+  genres?: string[]
 }
 
 export type SongEntry = { title: string; dur: number; artist: string; album: Album; idx: number }

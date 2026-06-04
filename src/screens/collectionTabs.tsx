@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { Track, Album, Playlist, SongEntry, albumQueue } from '../data'
+import { Track, Album, ArtistSummary, Playlist, SongEntry, albumQueue } from '../data'
 import { Section, Thumb } from '../components/Pivot'
 import { Icons } from '../components/icons'
 
@@ -15,6 +15,40 @@ export function groupAlbumsByArtist(albums: Album[]): Map<string, Album[]> {
     else grouped.set(album.artist, [album])
   })
   return grouped
+}
+
+export function groupArtistNamesByLetter(artists: string[]): { letter: string; names: string[] }[] {
+  const byLetter = new Map<string, string[]>()
+  artists.forEach(name => {
+    const letter = name.replace(/^the\s+/i, '')[0]?.toUpperCase() ?? '#'
+    const names = byLetter.get(letter)
+    if (names) names.push(name)
+    else byLetter.set(letter, [name])
+  })
+  return [...byLetter.entries()].map(([letter, names]) => ({ letter, names }))
+}
+
+export function buildGenresFromArtists(artists: ArtistSummary[], albums: Album[]): { label: string; color: string; queue: Track[] }[] {
+  const GENRE_COLORS = [
+    '#5ca800','#1ba1e2','#a4c400','#d80073','#fa6800','#6a00ff','#3a8f6b','#c43b6b',
+  ]
+  const artistsByGenre = new Map<string, Set<string>>()
+
+  artists.forEach(artist => {
+    artist.genres?.forEach(genre => {
+      const names = artistsByGenre.get(genre)
+      if (names) names.add(artist.name)
+      else artistsByGenre.set(genre, new Set([artist.name]))
+    })
+  })
+
+  return [...artistsByGenre.entries()]
+    .sort(([aGenre, aArtists], [bGenre, bArtists]) => bArtists.size - aArtists.size || aGenre.localeCompare(bGenre, 'en', { sensitivity: 'base' }))
+    .map(([genre, artistNames], index) => ({
+      label: genre,
+      color: albums.find(album => artistNames.has(album.artist))?.color ?? GENRE_COLORS[index % GENRE_COLORS.length],
+      queue: albums.filter(album => artistNames.has(album.artist)).flatMap(albumQueue),
+    }))
 }
 
 function LoadMoreSentinel({ active, loading, onLoadMore }: { active: boolean; loading: boolean; onLoadMore: () => void }) {
@@ -39,14 +73,7 @@ export function ArtistsTab({ artists, albumsByArtist, artistIdByName, hasMore, l
 }) {
   // Group by first letter so sticky tile resolves within its group — no overlap at transition
   const groups = useMemo(() => {
-    const result: { letter: string; names: string[] }[] = []
-    artists.forEach(name => {
-      const letter = name.replace(/^the\s+/i, '')[0]?.toUpperCase() ?? '#'
-      const last = result[result.length - 1]
-      if (last?.letter === letter) last.names.push(name)
-      else result.push({ letter, names: [name] })
-    })
-    return result
+    return groupArtistNamesByLetter(artists)
   }, [artists])
 
   return (
@@ -154,26 +181,12 @@ export function SongsTab({ songs, likedTrackUris, hasMore, loadingMore, onLoadMo
   )
 }
 
-export function GenresTab({ albums, onPlay }: {
+export function GenresTab({ artists, albums, onPlay }: {
+  artists: ArtistSummary[]
   albums: Album[]
   onPlay: (q: Track[], i: number) => void
 }) {
-  // Derive genres from album color-buckets; use a fixed Metro-style genre list
-  // supplemented with artist names when the library is populated.
-  const GENRE_COLORS = [
-    '#5ca800','#1ba1e2','#a4c400','#d80073','#fa6800','#6a00ff','#3a8f6b','#c43b6b',
-  ]
-  const genres = albums.length
-    ? [...new Set(albums.map(a => a.artist))].slice(0, 8).map((artist, i) => ({
-        label: artist,
-        color: albums.find(a => a.artist === artist)?.color ?? GENRE_COLORS[i % GENRE_COLORS.length],
-        queue: albums.filter(a => a.artist === artist).flatMap(a => albumQueue(a)),
-      }))
-    : ['alternative','ambient','electronic','indie','pop','rock','synth-pop','trip-hop'].map((g, i) => ({
-        label: g,
-        color: GENRE_COLORS[i % GENRE_COLORS.length],
-        queue: [] as Track[],
-      }))
+  const genres = useMemo(() => buildGenresFromArtists(artists, albums), [artists, albums])
 
   return (
     <div className="llist">

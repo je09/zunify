@@ -5,8 +5,16 @@ import { SpotifyPage } from './shared'
 import type { SpFullArtist, SpPaged, SpSimpleAlbum2, SpTrack, SpUser } from './types'
 
 export async function fetchFollowedArtists(limit = 50): Promise<ArtistSummary[]> {
-  const data = await spotifyGet<{ artists: SpPaged<SpFullArtist> }>(`/me/following?type=artist&limit=${limit}`)
-  return data.artists.items.map(mapArtist)
+  const artists: ArtistSummary[] = []
+  let next: string | null = `/me/following?type=artist&limit=${limit}`
+
+  while (next) {
+    const data: { artists: SpPaged<SpFullArtist> } = await spotifyGet(next)
+    artists.push(...data.artists.items.map(mapArtist))
+    next = data.artists.next
+  }
+
+  return artists
 }
 
 export async function fetchArtist(id: string): Promise<ArtistSummary> {

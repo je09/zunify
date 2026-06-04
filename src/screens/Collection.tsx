@@ -17,7 +17,7 @@ interface Props {
 }
 
 export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpenPlaylist, onPlay, onBack }: Props) {
-  const { albums, artists, songs, playlists, likedTrackUris, loading, loadingMore, error, totals, loadMore, artistIdByName } = useLibrary()
+  const { albums, followedArtists, artists, songs, playlists, likedTrackUris, loading, loadingMore, error, totals, loadMore, artistIdByName } = useLibrary()
   const swipe = useSwipe(
     () => tab === 0 ? onBack() : onTabChange(tab - 1),
     () => onTabChange(Math.min(TABS.length - 1, tab + 1)),
@@ -45,7 +45,7 @@ export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpen
         <ArtistsTab artists={artists} albumsByArtist={albumsByArtist} artistIdByName={artistIdByName} hasMore={hasMore(albums.length, totals.albums)} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onPlay={onPlay} />
         <AlbumsTab albums={albums} total={totals.albums} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenAlbum={onOpenAlbum} />
         <SongsTab songs={songs} likedTrackUris={likedTrackUris} hasMore={hasMore(likedTrackCount, totals.songs)} loadingMore={loadingMore.tracks} onLoadMore={() => loadMore('tracks')} onPlay={onPlay} />
-        <GenresTab albums={albums} onPlay={onPlay} />
+        <GenresTab artists={followedArtists} albums={albums} onPlay={onPlay} />
         <PlaylistsTab playlists={playlists} total={totals.playlists} loadingMore={loadingMore.playlists} onLoadMore={() => loadMore('playlists')} onOpenPlaylist={onOpenPlaylist} />
         <RadioTab artists={artists} albumsByArtist={albumsByArtist} onPlay={onPlay} />
       </PivotArea>

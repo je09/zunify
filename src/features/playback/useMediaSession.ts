@@ -7,6 +7,7 @@ interface MediaSessionOptions {
   time: number
   duration: number
   inSdk: boolean
+  sdkTimestamp?: number
   onLocalPlay: () => void
   onLocalPause: () => void
   onNext: () => void
@@ -14,7 +15,7 @@ interface MediaSessionOptions {
   onSeek: (fraction: number) => void
 }
 
-export function useMediaSession({ track, time, duration, inSdk, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: MediaSessionOptions) {
+export function useMediaSession({ track, time, duration, inSdk, sdkTimestamp, onLocalPlay, onLocalPause, onNext, onPrev, onSeek }: MediaSessionOptions) {
   useEffect(() => {
     if (!('mediaSession' in navigator)) return
     navigator.mediaSession.setActionHandler('play', () => {
@@ -42,7 +43,7 @@ export function useMediaSession({ track, time, duration, inSdk, onLocalPlay, onL
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title, artist: track.artist, album: track.album, artwork,
     })
-  }, [track.title, track.artist, track.album, track.imageUrl])
+  }, [track.title, track.artist, track.album, track.imageUrl, sdkTimestamp])
 
   useEffect(() => {
     if (!('mediaSession' in navigator) || !duration) return

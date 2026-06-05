@@ -27,7 +27,7 @@ export function NowPlayingPane({ pb, onOpen }: Props) {
           <button className={'iconbtn ' + (shuffle ? 'on' : '')} onClick={toggleShuffle} aria-label="Shuffle">
             {Icons.shuffle}
           </button>
-          <button className={'iconbtn ' + (repeat === 0 ? 'outline' : 'on')} onClick={cycleRepeat} aria-label="Repeat">
+          <button className={'iconbtn ' + (repeat === 0 ? '' : 'on')} onClick={cycleRepeat} aria-label="Repeat">
             {repeat === 2 ? Icons.repeat1 : Icons.repeat}
           </button>
           <button className="iconbtn" onClick={onOpen} aria-label="Queue">{Icons.queue}</button>

@@ -34,10 +34,10 @@ export async function transferPlayback(deviceId: string, play = false): Promise<
   return spotifyMutate('PUT', '/me/player', { device_ids: [deviceId], play })
 }
 
-async function deviceRequest(path: string, deviceId: string, body?: unknown, params?: SpotifyParams): Promise<void> {
+async function deviceRequest(method: 'POST' | 'PUT', path: string, deviceId: string, body?: unknown, params?: SpotifyParams): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      await spotifyRequest('PUT', path, body, { ...params, device_id: deviceId })
+      await spotifyRequest(method, path, body, { ...params, device_id: deviceId })
       return
     } catch (e) {
       if (!(e instanceof Error) || e.message !== 'spotify_404' || attempt === 2) throw e
@@ -47,11 +47,16 @@ async function deviceRequest(path: string, deviceId: string, body?: unknown, par
   }
 }
 
+async function playerRequest(method: 'POST' | 'PUT', path: string, deviceId?: string, body?: unknown, params?: SpotifyParams): Promise<void> {
+  if (deviceId) return deviceRequest(method, path, deviceId, body, params)
+  return spotifyMutate(method, path, body, params)
+}
+
 export async function startPlayback(
   body: { context_uri?: string; uris?: string[]; offset?: { position: number } } = {},
   deviceId?: string,
 ): Promise<void> {
-  if (deviceId) return deviceRequest('/me/player/play', deviceId, body)
+  if (deviceId) return deviceRequest('PUT', '/me/player/play', deviceId, body)
   return spotifyMutate('PUT', '/me/player/play', body)
 }
 
@@ -60,15 +65,23 @@ export async function pausePlayback(): Promise<void> {
 }
 
 export async function skipToNext(): Promise<void> {
-  return spotifyMutate('POST', '/me/player/next')
+  return playerRequest('POST', '/me/player/next')
 }
 
 export async function skipToPrevious(): Promise<void> {
-  return spotifyMutate('POST', '/me/player/previous')
+  return playerRequest('POST', '/me/player/previous')
+}
+
+export async function skipToNextOnDevice(deviceId: string): Promise<void> {
+  return playerRequest('POST', '/me/player/next', deviceId)
+}
+
+export async function skipToPreviousOnDevice(deviceId: string): Promise<void> {
+  return playerRequest('POST', '/me/player/previous', deviceId)
 }
 
 export async function seekToPosition(position_ms: number, deviceId?: string): Promise<void> {
-  if (deviceId) return deviceRequest('/me/player/seek', deviceId, undefined, { position_ms })
+  if (deviceId) return deviceRequest('PUT', '/me/player/seek', deviceId, undefined, { position_ms })
   return spotifyMutate('PUT', '/me/player/seek', undefined, { position_ms })
 }
 
@@ -77,7 +90,7 @@ export async function setRepeatMode(state: 'track' | 'context' | 'off'): Promise
 }
 
 export async function setShuffleState(state: boolean, deviceId?: string): Promise<void> {
-  if (deviceId) return deviceRequest('/me/player/shuffle', deviceId, undefined, { state })
+  if (deviceId) return deviceRequest('PUT', '/me/player/shuffle', deviceId, undefined, { state })
   return spotifyMutate('PUT', '/me/player/shuffle', undefined, { state })
 }
 

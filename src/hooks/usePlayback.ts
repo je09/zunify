@@ -14,7 +14,7 @@ import {
   setRepeatMode as setRepeatModeApi,
   checkSavedTracks, saveTracks, removeTracks,
   fetchCurrentPlayback, fetchUserQueue,
-  pausePlayback, skipToNext, skipToPrevious, seekToPosition, setShuffleState,
+  pausePlayback, skipToNext, skipToNextOnDevice, skipToPrevious, skipToPreviousOnDevice, seekToPosition, setShuffleState,
   startPlayback as startPlaybackApi,
 } from '../spotifyApi'
 
@@ -56,6 +56,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const idxRef = useRef(idx)
   const favRef = useRef(fav)
   const startupSyncRef = useRef(false)
+  const skipPendingRef = useRef(false)
   const sdkBaseRef = useRef<{ position: number; timestamp: number }>({ position: 0, timestamp: 0 })
 
   spotifyRef.current = spotify
@@ -174,17 +175,26 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   timeRef.current = time
 
   const next = useCallback(() => {
+    if (skipPendingRef.current) return
+    skipPendingRef.current = true
     const previousIdx = idxRef.current
     const previousTime = timeRef.current
     setTime(0)
     setIdx(i => queueRef.current.length ? (i + 1) % queueRef.current.length : 0)
-    void skipToNext().catch(() => {
-      setIdx(previousIdx)
-      setTime(previousTime)
-    })
+    const engine = spotifyRef.current
+    const request = engine
+      ? engine.player.nextTrack().catch(() => skipToNextOnDevice(engine.deviceId))
+      : skipToNext()
+    void request
+      .catch(() => {
+        setIdx(previousIdx)
+        setTime(previousTime)
+      })
+      .finally(() => { skipPendingRef.current = false })
   }, [])
 
   const prev = useCallback(() => {
+    if (skipPendingRef.current) return
     const previousIdx = idxRef.current
     const previousTime = timeRef.current
     if (timeRef.current > 3) {
@@ -192,12 +202,19 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
       void seekToPosition(0).catch(() => setTime(previousTime))
       return
     }
+    skipPendingRef.current = true
     setTime(0)
     setIdx(i => queueRef.current.length ? (i - 1 + queueRef.current.length) % queueRef.current.length : 0)
-    void skipToPrevious().catch(() => {
-      setIdx(previousIdx)
-      setTime(previousTime)
-    })
+    const engine = spotifyRef.current
+    const request = engine
+      ? engine.player.previousTrack().catch(() => skipToPreviousOnDevice(engine.deviceId))
+      : skipToPrevious()
+    void request
+      .catch(() => {
+        setIdx(previousIdx)
+        setTime(previousTime)
+      })
+      .finally(() => { skipPendingRef.current = false })
   }, [])
 
   const seek = useCallback((fraction: number) => {

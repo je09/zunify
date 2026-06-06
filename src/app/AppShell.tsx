@@ -54,7 +54,13 @@ export function AppShell({ token, onLogout }: AppShellProps) {
   const playAndGo = (queue: Track[], idx: number, contextUri?: string) => {
     if (queue.length === 0 && !contextUri) return
     artistPlayRequestRef.current += 1
-    pb.play(queue, idx, contextUri)
+    const selected = queue[idx]
+    const sameTrack = Boolean(
+      selected?.spotifyUri &&
+      pb.track.spotifyUri &&
+      selected.spotifyUri === pb.track.spotifyUri
+    )
+    if (!pb.playing || !sameTrack) pb.play(queue, idx, contextUri)
     push({ screen: 'nowplaying' })
   }
 

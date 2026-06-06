@@ -3,6 +3,7 @@ import { PlaybackState } from "../hooks/usePlayback";
 import { fmt } from "../data";
 import { Icons } from "../components/icons";
 import { ProgressBar, useSwipe } from "../components/Pivot";
+import { FadeImage } from "../components/FadeImage";
 import { useLibrary } from "../LibraryContext";
 import { openContextMenu } from "../components/ContextMenu";
 import { addTracksToPlaylist } from "../spotifyApi";
@@ -104,7 +105,7 @@ export function Player({
       <div className="np-tint" style={{ background: tint }} />
       {track.imageUrl && (
         <div className="np-bg-slot">
-          <img src={track.imageUrl} alt="" />
+          <FadeImage src={track.imageUrl} alt="" />
         </div>
       )}
       <div className="np-scrim" />
@@ -124,8 +125,8 @@ export function Player({
               style={{ background: track.color }}
             />
             {track.imageUrl && (
-              <img
-                className="art-img"
+              <FadeImage
+                boxClassName="art-img"
                 src={track.imageUrl}
                 alt=""
                 decoding="async"

@@ -3,6 +3,7 @@ import { PlaybackState } from '../hooks/usePlayback'
 import { fmt } from '../data'
 import { Icons } from './icons'
 import { ProgressBar } from './Pivot'
+import { FadeImage } from './FadeImage'
 
 interface Props {
   pb: PlaybackState
@@ -21,7 +22,7 @@ export function NowPlayingPane({ pb, onOpen }: Props) {
 
       <div className="artrow">
         <div className="art" style={{ background: track.color }} onClick={onOpen} role="button" aria-label="Open now playing">
-          {track.imageUrl && <img src={track.imageUrl} alt="" />}
+          {track.imageUrl && <FadeImage boxClassName="art-img" src={track.imageUrl} alt="" />}
         </div>
         <div className="sideicons">
           <button className={'iconbtn ' + (shuffle ? 'on' : '')} onClick={toggleShuffle} aria-label="Shuffle">

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Track, Album, ArtistSummary, Playlist, SongEntry, albumQueue } from '../data'
 import { Section, Thumb, WP8Spinner } from '../components/Pivot'
+import { FadeImage } from '../components/FadeImage'
 import { Icons } from '../components/icons'
 
 export function hasMore(loaded: number, total: number | null): boolean {
@@ -268,8 +269,8 @@ export function PlaylistsTab({ playlists, total, loadingMore, onLoadMore, onOpen
           <div key={pl.id} className="pl-row" onClick={() => onOpenPlaylist(pl)}>
             <div className="pl-mosaic">
               {pl.imageUrl
-                ? <img src={pl.imageUrl} alt="" />
-                : <div style={{ background: '#333', width: '100%', height: '100%' }} />
+                ? <FadeImage src={pl.imageUrl} alt="" />
+                : <div className="art-placeholder" style={{ width: '100%', height: '100%' }} />
               }
             </div>
             <div className="pl-meta">

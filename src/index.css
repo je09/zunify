@@ -241,6 +241,13 @@ body {
 .album-list { padding: 6px 26px 30px; }
 .album-row  { display: flex; gap: 16px; align-items: center; cursor: pointer; margin-bottom: 18px; }
 .thumb      { flex: 0 0 auto; }
+.fade-img-box {
+  display: block; position: relative; overflow: hidden; flex: 0 0 auto;
+  background: rgba(255,255,255,.08);
+}
+.fade-img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity .14s ease-out; }
+.fade-img.loaded { opacity: 1; }
+.art-placeholder { background: var(--accent); }
 .album-meta { min-width: 0; }
 .al-title   { font-size: 24px; font-weight: 300; line-height: 1.15; text-wrap: pretty; }
 .al-artist  { font-size: 18px; font-weight: 300; color: var(--dim); margin-top: 4px; }
@@ -257,6 +264,7 @@ body {
   display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
   overflow: hidden;
 }
+.pl-mosaic .fade-img-box { width: 100%; height: 100%; grid-column: 1 / -1; grid-row: 1 / -1; }
 .pl-mosaic img { width: 100%; height: 100%; object-fit: cover; grid-column: 1 / -1; grid-row: 1 / -1; }
 .pl-mosaic span { display: block; }
 .pl-name  { font-size: 25px; font-weight: 300; line-height: 1.1; }
@@ -411,7 +419,8 @@ body {
 
 /* Full-bleed artist/album photo slot (the iconic WP7 treatment) */
 .np-bg-slot { position: absolute; inset: 0; z-index: 1; }
-.np-bg-slot img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .35; }
+.np-bg-slot .fade-img-box { width: 100%; height: 100%; }
+.np-bg-slot .fade-img.loaded { opacity: .35; }
 
 /* Legibility scrim over ambient/photo */
 .np-scrim {
@@ -455,6 +464,7 @@ body {
 .art-color    { position: absolute; inset: 0; }
 .art-img,
 .art img      { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.art .fade-img-box { position: absolute; inset: 0; }
 
 .sideicons    { display: flex; flex-direction: column; justify-content: space-between; padding: 6px 0; min-height: 156px; }
 

@@ -1,5 +1,6 @@
 import { useRef, useLayoutEffect, useState, useCallback, useEffect, Children, ReactNode, forwardRef } from 'react'
 import { Icons } from './icons'
+import { FadeImage } from './FadeImage'
 
 // ── PivotArea — sliding tab transition (both tabs visible during animation) ───
 // Renders the exiting tab and the entering tab simultaneously with CSS slide
@@ -276,18 +277,18 @@ interface ThumbProps {
   imageUrl?: string
 }
 
-export function Thumb({ color, size, imageUrl }: ThumbProps) {
+export function Thumb({ size, imageUrl }: ThumbProps) {
   const fill = !size
   const boxStyle: React.CSSProperties = fill
-    ? { background: color, width: '100%', aspectRatio: '1 / 1' }
-    : { background: color, width: size, height: size }
+    ? { width: '100%', aspectRatio: '1 / 1' }
+    : { width: size, height: size }
   const imgStyle: React.CSSProperties = fill
     ? { width: '100%', aspectRatio: '1 / 1', objectFit: 'cover', display: 'block' }
     : { width: size, height: size, objectFit: 'cover', display: 'block' }
 
   return imageUrl
-    ? <img className="thumb" src={imageUrl} alt="" style={imgStyle} loading="lazy" decoding="async" />
-    : <div className="thumb" style={boxStyle} />
+    ? <FadeImage boxClassName="thumb" src={imageUrl} alt="" boxStyle={imgStyle} loading="lazy" decoding="async" />
+    : <div className="thumb art-placeholder" style={boxStyle} />
 }
 
 export function WP8Loading() {

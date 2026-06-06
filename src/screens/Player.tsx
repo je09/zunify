@@ -32,6 +32,7 @@ export function Player({
     shuffle,
     repeat,
     duration,
+    skipPending,
     prevDisabled,
     nextDisabled,
     toggle,
@@ -51,6 +52,8 @@ export function Player({
   const displayTime = previewTime ?? time;
   const pct = duration > 0 ? Math.min(100, (displayTime / duration) * 100) : 0;
   const repeatState = repeat === 0 ? "" : "on";
+  const prevLocked = prevDisabled || skipPending;
+  const nextLocked = nextDisabled || skipPending;
   const isLiked =
     fav || Boolean(track.spotifyUri && likedTrackUris.has(track.spotifyUri));
   const tint = `radial-gradient(125% 95% at 28% 16%, ${track.color}66 0%, #0c0c0c 60%, #060606 100%)`;
@@ -77,8 +80,9 @@ export function Player({
   const transport = (
     <div className={"transport" + (controls === "bottom" ? " bottom" : "")}>
       <button
-        className={"tbtn" + (prevDisabled ? " tbtn-disabled" : "")}
-        onClick={prevDisabled ? undefined : prev}
+        className={"tbtn" + (prevLocked ? " tbtn-disabled" : "")}
+        onClick={prevLocked ? undefined : prev}
+        disabled={prevLocked}
         aria-label="Previous"
       >
         {Icons.prev}
@@ -91,8 +95,9 @@ export function Player({
         {playing ? Icons.pause : Icons.play}
       </button>
       <button
-        className={"tbtn" + (nextDisabled ? " tbtn-disabled" : "")}
-        onClick={nextDisabled ? undefined : next}
+        className={"tbtn" + (nextLocked ? " tbtn-disabled" : "")}
+        onClick={nextLocked ? undefined : next}
+        disabled={nextLocked}
         aria-label="Next"
       >
         {Icons.next}

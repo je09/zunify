@@ -12,6 +12,7 @@ export interface PlaybackState {
   shuffle: boolean
   repeat: 0 | 1 | 2
   started: boolean
+  skipPending: boolean
   prevDisabled: boolean
   nextDisabled: boolean
   queue: Track[]

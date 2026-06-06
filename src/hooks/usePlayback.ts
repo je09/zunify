@@ -49,6 +49,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const [remoteShuffle, setRemoteShuffle] = useState(false)
   const [remoteRepeat, setRemoteRepeat] = useState<0 | 1 | 2>(0)
   const [started, setStarted] = useState(false)
+  const [skipPending, setSkipPending] = useState(false)
   const [fav, setFav] = useState(false)
 
   const spotifyRef = useRef<SpotifyEngine | null | undefined>(undefined)
@@ -177,6 +178,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const next = useCallback(() => {
     if (skipPendingRef.current) return
     skipPendingRef.current = true
+    setSkipPending(true)
     const previousIdx = idxRef.current
     const previousTime = timeRef.current
     setTime(0)
@@ -190,7 +192,10 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
         setIdx(previousIdx)
         setTime(previousTime)
       })
-      .finally(() => { skipPendingRef.current = false })
+      .finally(() => {
+        skipPendingRef.current = false
+        setSkipPending(false)
+      })
   }, [])
 
   const prev = useCallback(() => {
@@ -203,6 +208,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
       return
     }
     skipPendingRef.current = true
+    setSkipPending(true)
     setTime(0)
     setIdx(i => queueRef.current.length ? (i - 1 + queueRef.current.length) % queueRef.current.length : 0)
     const engine = spotifyRef.current
@@ -214,7 +220,10 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
         setIdx(previousIdx)
         setTime(previousTime)
       })
-      .finally(() => { skipPendingRef.current = false })
+      .finally(() => {
+        skipPendingRef.current = false
+        setSkipPending(false)
+      })
   }, [])
 
   const seek = useCallback((fraction: number) => {
@@ -276,7 +285,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
 
   return {
     track, upNext, playing, time, duration, fav, shuffle, repeat, started,
-    prevDisabled, nextDisabled,
+    skipPending, prevDisabled, nextDisabled,
     queue, idx,
     play, toggle, next, prev, seek,
     toggleFav, toggleShuffle, cycleRepeat,

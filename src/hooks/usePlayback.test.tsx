@@ -162,11 +162,14 @@ describe('usePlayback', () => {
     })
 
     expect(mockedSkipToNext).toHaveBeenCalledTimes(1)
+    expect(latest.skipPending).toBe(true)
 
     await act(async () => {
       resolveSkip()
       await Promise.resolve()
     })
+
+    expect(latest.skipPending).toBe(false)
   })
 
   it('falls back once to device API when SDK next fails', async () => {

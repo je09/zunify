@@ -21,7 +21,20 @@ describe('spotifyPlayback', () => {
     expect(buildSpotifyPlayCommand(queue, 1, 'spotify:album:album-a')).toEqual({
       type: 'context',
       contextUri: 'spotify:album:album-a',
-      offsetPosition: 1,
+      offset: { uri: 'spotify:track:a2' },
+    })
+  })
+
+  it('falls back to context position when the selected track has no Spotify URI', () => {
+    const queue = [
+      track('album one', 'spotify:track:a1'),
+      track('album two'),
+    ]
+
+    expect(buildSpotifyPlayCommand(queue, 1, 'spotify:album:album-a')).toEqual({
+      type: 'context',
+      contextUri: 'spotify:album:album-a',
+      offset: { position: 1 },
     })
   })
 

@@ -140,8 +140,8 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     if (engine) void engine.player.activateElement()
     const request = command.type === 'context'
       ? engine
-        ? engine.startPlaybackContext(command.contextUri, command.offsetPosition)
-        : startPlaybackApi({ context_uri: command.contextUri, offset: { position: command.offsetPosition } })
+        ? engine.startPlaybackContext(command.contextUri, command.offset)
+        : startPlaybackApi({ context_uri: command.contextUri, offset: command.offset })
       : engine
         ? engine.startPlayback(command.uris, command.offsetIndex)
         : startPlaybackApi({ uris: command.uris, offset: { position: command.offsetIndex } })

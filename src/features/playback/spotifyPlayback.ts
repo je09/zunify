@@ -3,11 +3,14 @@ import type { SpotifyEngine } from '../../useSpotifyPlayer'
 import { UpNextTrack } from './playbackTypes'
 
 export type SpotifyPlayCommand =
-  | { type: 'context'; contextUri: string; offsetPosition: number }
+  | { type: 'context'; contextUri: string; offset: { position: number } | { uri: string } }
   | { type: 'uris'; uris: string[]; offsetIndex: number }
 
 export function buildSpotifyPlayCommand(queue: Track[], idx: number, contextUri?: string): SpotifyPlayCommand | null {
-  if (contextUri) return { type: 'context', contextUri, offsetPosition: Math.max(0, idx) }
+  if (contextUri) {
+    const uri = queue[idx]?.spotifyUri
+    return { type: 'context', contextUri, offset: uri ? { uri } : { position: Math.max(0, idx) } }
+  }
 
   const uris = queue.flatMap(t => t.spotifyUri ? [t.spotifyUri] : [])
   if (!uris.length) return null

@@ -21,7 +21,7 @@ export interface SpotifyEngine {
   startPlayback: (uris: string[], offsetIndex: number) => Promise<void>;
   startPlaybackContext: (
     contextUri: string,
-    offsetPosition: number,
+    offset: { position: number } | { uri: string },
   ) => Promise<void>;
   setShuffle: (state: boolean) => Promise<void>;
 }
@@ -134,14 +134,14 @@ export function useSpotifyPlayer(
 
           const playContext = async (
             contextUri: string,
-            offsetPosition: number,
+            offset: { position: number } | { uri: string },
           ): Promise<void> => {
             const token = await getValidToken();
             if (!token || !contextUri) return;
             await startPlayback(
               {
                 context_uri: contextUri,
-                offset: { position: Math.max(0, offsetPosition) },
+                offset: 'position' in offset ? { position: Math.max(0, offset.position) } : offset,
               },
               device_id,
             );

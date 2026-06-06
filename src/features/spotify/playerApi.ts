@@ -53,7 +53,7 @@ async function playerRequest(method: 'POST' | 'PUT', path: string, deviceId?: st
 }
 
 export async function startPlayback(
-  body: { context_uri?: string; uris?: string[]; offset?: { position: number } } = {},
+  body: { context_uri?: string; uris?: string[]; offset?: { position: number } | { uri: string } } = {},
   deviceId?: string,
 ): Promise<void> {
   if (deviceId) return deviceRequest('PUT', '/me/player/play', deviceId, body)

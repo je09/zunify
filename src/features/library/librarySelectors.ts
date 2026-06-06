@@ -39,6 +39,7 @@ export function buildLibrary(
     songs: buildSongs(songsAlbums),
     playlists,
     likedTrackUris,
+    savedTrackUris: likedTrackUris,
     artistIdByName: idMap,
     userId,
     loading: false,

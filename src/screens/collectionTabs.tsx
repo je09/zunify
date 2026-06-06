@@ -3,6 +3,7 @@ import { Track, Album, ArtistSummary, Playlist, SongEntry, albumQueue } from '..
 import { Section, Thumb, WP8Spinner } from '../components/Pivot'
 import { FadeImage } from '../components/FadeImage'
 import { Icons } from '../components/icons'
+import { useLibrary } from '../LibraryContext'
 
 export function hasMore(loaded: number, total: number | null): boolean {
   return total === null || loaded < total
@@ -154,15 +155,25 @@ export function AlbumsTab({ albums, total, loadingMore, onLoadMore, onOpenAlbum 
   )
 }
 
-export function SongsTab({ songs, likedTrackUris, hasMore, loadingMore, onLoadMore, onPlay }: {
-  songs: SongEntry[]; likedTrackUris: Set<string>; hasMore: boolean; loadingMore: boolean
+export function SongsTab({ songs, hasMore, loadingMore, onLoadMore, onPlay }: {
+  songs: SongEntry[]; hasMore: boolean; loadingMore: boolean
   onLoadMore: () => void; onPlay: (q: Track[], i: number) => void
 }) {
+  const { savedTrackUris, checkSavedTrackUris } = useLibrary()
   const validSongs = useMemo(() => songs.filter(s => s.title), [songs])
   const allTracks = useMemo<Track[]>(
     () => validSongs.map(s => albumQueue(s.album)[s.idx]).filter(Boolean) as Track[],
     [validSongs]
   )
+  const trackUris = useMemo(
+    () => validSongs.map(s => s.album.spotifyTrackUris?.[s.idx]).filter((uri): uri is string => Boolean(uri)),
+    [validSongs]
+  )
+  const trackUriKey = trackUris.join('\u0000')
+
+  useEffect(() => {
+    checkSavedTrackUris(trackUris)
+  }, [trackUriKey, trackUris, checkSavedTrackUris])
 
   // Group by first letter
   const groups = useMemo(() => {
@@ -194,7 +205,7 @@ export function SongsTab({ songs, likedTrackUris, hasMore, loadingMore, onLoadMo
                 <div className="lrow-title">{s.title}</div>
                 <div className="lrow-sub">{s.artist}</div>
               </div>
-              {s.album.spotifyTrackUris?.[s.idx] && likedTrackUris.has(s.album.spotifyTrackUris[s.idx]!) && (
+              {s.album.spotifyTrackUris?.[s.idx] && savedTrackUris.has(s.album.spotifyTrackUris[s.idx]!) && (
                 <div className="liked-dot" title="liked song">{Icons.heart}</div>
               )}
             </div>

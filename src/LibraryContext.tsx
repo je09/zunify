@@ -1,8 +1,9 @@
-import { createContext, useContext, useReducer, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react'
+import { createContext, useContext, useReducer, useEffect, useRef, useCallback, useMemo, useState, ReactNode } from 'react'
 import type { Album, ArtistSummary } from './data'
 import {
   fetchSavedAlbumsPage, fetchUserPlaylistsPage, fetchLikedTracksPage,
   fetchPlaylistTracksPage, fetchCurrentUser, fetchFollowedArtists,
+  checkSavedTracks, saveTracks, removeTracks,
 } from './spotifyApi'
 import { libraryReducer } from './features/library/libraryReducer'
 import { buildLibrary, likedSongsPlaylist } from './features/library/librarySelectors'
@@ -14,7 +15,11 @@ const noop = () => {}
 
 const EMPTY: Library = {
   ...EMPTY_LIBRARY_STATE,
-  loadMore: noop, loadMorePlaylistTracks: noop, setSavedAlbum: noop,
+  loadMore: noop,
+  loadMorePlaylistTracks: noop,
+  checkSavedTrackUris: noop,
+  setSavedTrack: async () => {},
+  setSavedAlbum: noop,
 }
 
 const LibraryContext = createContext<Library>(EMPTY)
@@ -27,6 +32,7 @@ interface Props { token: string | null; children: ReactNode }
 
 export function LibraryProvider({ token, children }: Props) {
   const [lib, dispatch] = useReducer(libraryReducer, EMPTY_LIBRARY_STATE)
+  const [savedTrackUris, setSavedTrackUris] = useState<Set<string>>(new Set())
   const tokenRef = useRef(token)
 
   // Pagination cursors
@@ -41,6 +47,10 @@ export function LibraryProvider({ token, children }: Props) {
   const likedLoadedRef = useRef(false)
   const loadingPlaylistTracksRef = useRef<Record<string, boolean>>({})
   const playlistsRef = useRef(lib.playlists)
+  const savedTrackUrisRef = useRef(savedTrackUris)
+  const checkedTrackIdsRef = useRef<Set<string>>(new Set())
+  const checkingTrackIdsRef = useRef<Set<string>>(new Set())
+  const savedTrackStatusRef = useRef<Map<string, boolean>>(new Map())
   const userIdRef = useRef<string | null>(null)
   const followedArtistsRef = useRef<ArtistSummary[]>([])
   const requestGenRef = useRef(0)
@@ -159,6 +169,65 @@ export function LibraryProvider({ token, children }: Props) {
     dispatch({ type: 'set-saved-album', album, saved, userId: userIdRef.current, followedArtists: followedArtistsRef.current })
   }, [])
 
+  const checkSavedTrackUris = useCallback((uris: string[]) => {
+    if (!tokenRef.current) return
+    const idByUri = new Map<string, string>()
+    uris.forEach(uri => {
+      const id = trackIdFromUri(uri)
+      if (!id || checkedTrackIdsRef.current.has(id) || checkingTrackIdsRef.current.has(id)) return
+      idByUri.set(uri, id)
+      checkingTrackIdsRef.current.add(id)
+    })
+    const entries = [...idByUri.entries()]
+    if (!entries.length) return
+
+    checkSavedTracks(entries.map(([, id]) => id))
+      .then(saved => {
+        setSavedTrackUris(prev => {
+          const next = new Set(prev)
+          entries.forEach(([uri, id], index) => {
+            const isSaved = Boolean(saved[index])
+            checkedTrackIdsRef.current.add(id)
+            savedTrackStatusRef.current.set(id, isSaved)
+            if (isSaved) next.add(uri)
+            else next.delete(uri)
+          })
+          return next
+        })
+      })
+      .catch(() => {})
+      .finally(() => {
+        entries.forEach(([, id]) => checkingTrackIdsRef.current.delete(id))
+      })
+  }, [])
+
+  const setSavedTrack = useCallback(async (uri: string, saved: boolean) => {
+    const id = trackIdFromUri(uri)
+    if (!id) return
+    const previous = savedTrackUrisRef.current.has(uri)
+    checkedTrackIdsRef.current.add(id)
+    savedTrackStatusRef.current.set(id, saved)
+    setSavedTrackUris(prev => {
+      const next = new Set(prev)
+      if (saved) next.add(uri)
+      else next.delete(uri)
+      return next
+    })
+    try {
+      if (saved) await saveTracks([id])
+      else await removeTracks([id])
+    } catch (err) {
+      savedTrackStatusRef.current.set(id, previous)
+      setSavedTrackUris(prev => {
+        const next = new Set(prev)
+        if (previous) next.add(uri)
+        else next.delete(uri)
+        return next
+      })
+      throw err
+    }
+  }, [])
+
   useEffect(() => {
     tokenRef.current = token
     requestGenRef.current += 1
@@ -167,6 +236,10 @@ export function LibraryProvider({ token, children }: Props) {
     loadingPlaylistsRef.current = false
     loadingTracksRef.current = false
     loadingPlaylistTracksRef.current = {}
+    checkedTrackIdsRef.current = new Set()
+    checkingTrackIdsRef.current = new Set()
+    savedTrackStatusRef.current = new Map()
+    setSavedTrackUris(new Set())
 
     if (!token) {
       nextAlbumsRef.current = undefined
@@ -216,17 +289,41 @@ export function LibraryProvider({ token, children }: Props) {
   }, [token, loadMore])
 
   playlistsRef.current = lib.playlists
+  savedTrackUrisRef.current = savedTrackUris
+
+  useEffect(() => {
+    if (!lib.likedTrackUris.size) return
+    setSavedTrackUris(prev => {
+      const next = new Set(prev)
+      lib.likedTrackUris.forEach(uri => {
+        const id = trackIdFromUri(uri)
+        if (!id) return
+        if (savedTrackStatusRef.current.get(id) === false) return
+        next.add(uri)
+        checkedTrackIdsRef.current.add(id)
+        savedTrackStatusRef.current.set(id, true)
+      })
+      return next
+    })
+  }, [lib.likedTrackUris])
 
   const value = useMemo<Library>(() => ({
     ...lib,
+    savedTrackUris,
     loadMore,
     loadMorePlaylistTracks,
+    checkSavedTrackUris,
+    setSavedTrack,
     setSavedAlbum,
-  }), [lib, loadMore, loadMorePlaylistTracks, setSavedAlbum])
+  }), [lib, savedTrackUris, loadMore, loadMorePlaylistTracks, checkSavedTrackUris, setSavedTrack, setSavedAlbum])
 
   return (
     <LibraryContext.Provider value={value}>
       {children}
     </LibraryContext.Provider>
   )
+}
+
+function trackIdFromUri(uri: string): string | null {
+  return uri.startsWith('spotify:track:') ? uri.split(':')[2] || null : null
 }

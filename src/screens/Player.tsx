@@ -43,7 +43,7 @@ export function Player({
     toggleShuffle,
     cycleRepeat,
   } = pb;
-  const { likedTrackUris, playlists } = useLibrary();
+  const { playlists } = useLibrary();
   const [previewTime, setPreviewTime] = useState<number | null>(null);
   const swipe = useSwipe(onBack, () => {});
 
@@ -54,8 +54,7 @@ export function Player({
   const repeatState = repeat === 0 ? "" : "on";
   const prevLocked = prevDisabled || skipPending;
   const nextLocked = nextDisabled || skipPending;
-  const isLiked =
-    fav || Boolean(track.spotifyUri && likedTrackUris.has(track.spotifyUri));
+  const isLiked = fav;
   const tint = `radial-gradient(125% 95% at 28% 16%, ${track.color}66 0%, #0c0c0c 60%, #060606 100%)`;
   const shareTrack = () => {
     const id = track.spotifyUri?.split(":")[2];

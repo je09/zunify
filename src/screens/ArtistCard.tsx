@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Track, Album, ArtistSummary, fmt } from '../data'
-import { fetchArtist, fetchArtistTopTracks, fetchArtistAlbums, checkSavedTracks } from '../spotifyApi'
+import { fetchArtist, fetchArtistTopTracks, fetchArtistAlbums } from '../spotifyApi'
 import { Pivot, PivotArea, Overline, Thumb, useSwipe, BottomBack, WP8Spinner } from '../components/Pivot'
 import { Icons } from '../components/icons'
+import { useLibrary } from '../LibraryContext'
 
 interface Props {
   name: string
@@ -19,20 +20,20 @@ interface ArtistState {
   topTracks: Track[]
   albums: Album[]
   singles: Album[]
-  savedTrackIds: Set<string>
   loading: boolean
 }
 
 export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPlay, onBack }: Props) {
+  const { savedTrackUris, checkSavedTrackUris } = useLibrary()
   const [state, setState] = useState<ArtistState>({
     artist: null, topTracks: [], albums: [], singles: [],
-    savedTrackIds: new Set(), loading: Boolean(artistId),
+    loading: Boolean(artistId),
   })
 
   useEffect(() => {
     setState({
       artist: null, topTracks: [], albums: [], singles: [],
-      savedTrackIds: new Set(), loading: Boolean(artistId),
+      loading: Boolean(artistId),
     })
     if (!artistId) return
     let cancelled = false
@@ -43,19 +44,12 @@ export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPl
       fetchArtistTopTracks(artistId),
       fetchArtistAlbums(artistId, { limit: 10, include_groups: 'album' }),
       fetchArtistAlbums(artistId, { limit: 10, include_groups: 'single' }),
-    ]).then(async ([artist, topTracks, albumsPage, singlesPage]) => {
-      if (cancelled) return
-
-      // Wave 2: check saved state for top tracks
-      const trackIds = topTracks.map(t => t.spotifyUri?.split(':')[2]).filter(Boolean) as string[]
-      const saved = trackIds.length ? await checkSavedTracks(trackIds).catch(() => [] as boolean[]) : []
-      const savedTrackIds = new Set(trackIds.filter((_, i) => saved[i]))
-
+    ]).then(([artist, topTracks, albumsPage, singlesPage]) => {
       if (cancelled) return
       setState({
         artist, topTracks,
         albums: albumsPage.items, singles: singlesPage.items,
-        savedTrackIds, loading: false,
+        loading: false,
       })
     }).catch(() => {
       if (!cancelled) setState(prev => ({ ...prev, loading: false }))
@@ -64,7 +58,16 @@ export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPl
     return () => { cancelled = true }
   }, [artistId])
 
-  const { artist, topTracks, albums, singles, savedTrackIds, loading } = state
+  const { artist, topTracks, albums, singles, loading } = state
+  const topTrackUris = useMemo(
+    () => topTracks.map(t => t.spotifyUri).filter((uri): uri is string => Boolean(uri)),
+    [topTracks]
+  )
+  const topTrackUriKey = topTrackUris.join('\u0000')
+
+  useEffect(() => {
+    checkSavedTrackUris(topTrackUris)
+  }, [topTrackUriKey, topTrackUris, checkSavedTrackUris])
 
   const bgImage = artist?.imageUrl
   const displayName = artist?.name ?? name
@@ -159,7 +162,7 @@ return (
                   <div className="lrow-title">{t.title}</div>
                   <div className="lrow-sub">{fmt(t.dur)}</div>
                 </div>
-                {t.spotifyUri && savedTrackIds.has(t.spotifyUri.split(':')[2]) && (
+                {t.spotifyUri && savedTrackUris.has(t.spotifyUri) && (
                   <div className="liked-dot" title="liked">{Icons.heart}</div>
                 )}
               </div>

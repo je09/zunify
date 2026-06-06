@@ -10,9 +10,9 @@ import {
 } from '../features/playback/spotifyPlayback'
 import { useMediaSession } from '../features/playback/useMediaSession'
 import { claimAudioSession } from '../features/playback/silentAudio'
+import { useLibrary } from '../LibraryContext'
 import {
   setRepeatMode as setRepeatModeApi,
-  checkSavedTracks, saveTracks, removeTracks,
   fetchCurrentPlayback, fetchUserQueue,
   pausePlayback, skipToNext, skipToNextOnDevice, skipToPrevious, skipToPreviousOnDevice, seekToPosition, setShuffleState,
   startPlayback as startPlaybackApi,
@@ -42,6 +42,7 @@ function getQueuedUpNext(queue: Track[], idx: number): UpNextTrack[] {
 }
 
 export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
+  const { savedTrackUris, checkSavedTrackUris, setSavedTrack } = useLibrary()
   const [queue, setQueue] = useState<Track[]>([])
   const [idx, setIdx] = useState(0)
   const [remotePlaying, setRemotePlaying] = useState(false)
@@ -50,12 +51,10 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const [remoteRepeat, setRemoteRepeat] = useState<0 | 1 | 2>(0)
   const [started, setStarted] = useState(false)
   const [skipPending, setSkipPending] = useState(false)
-  const [fav, setFav] = useState(false)
 
   const spotifyRef = useRef<SpotifyEngine | null | undefined>(undefined)
   const queueRef = useRef(queue)
   const idxRef = useRef(idx)
-  const favRef = useRef(fav)
   const startupSyncRef = useRef(false)
   const skipPendingRef = useRef(false)
   const sdkBaseRef = useRef<{ position: number; timestamp: number }>({ position: 0, timestamp: 0 })
@@ -63,7 +62,6 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   spotifyRef.current = spotify
   queueRef.current = queue
   idxRef.current = idx
-  favRef.current = fav
 
   const s = spotify?.sdkState
   const sdkLive = spotify != null && s != null
@@ -78,6 +76,8 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const prevDisabled = Boolean(disallows?.skipping_prev)
   const nextDisabled = Boolean(disallows?.skipping_next)
   const duration = track.dur
+  const trackUri = sdkLive ? sdkCurrent?.uri : track.spotifyUri
+  const fav = Boolean(trackUri && savedTrackUris.has(trackUri))
 
   useEffect(() => {
     if (startupSyncRef.current) return
@@ -107,15 +107,8 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   }, [])
 
   useEffect(() => {
-    const uri = sdkLive ? sdkCurrent?.uri : queue[idx]?.spotifyUri
-    const id = uri?.split(':')[2]
-    if (!id) { setFav(false); return }
-    let live = true
-    checkSavedTracks([id]).then(([liked]) => {
-      if (live) setFav(!!liked)
-    }).catch(() => {})
-    return () => { live = false }
-  }, [sdkLive, sdkCurrent?.uri, queue, idx])
+    if (trackUri) checkSavedTrackUris([trackUri])
+  }, [trackUri, checkSavedTrackUris])
 
   useEffect(() => {
     if (!sdkLive || !s) return
@@ -244,12 +237,8 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
 
   const toggleFav = useCallback(() => {
     const uri = sdkLive ? s!.track_window.current_track.uri : queueRef.current[idxRef.current]?.spotifyUri
-    const id = uri?.split(':')[2]
-    if (!id) { setFav(v => !v); return }
-    const newFav = !favRef.current
-    setFav(newFav)
-    ;(newFav ? saveTracks([id]) : removeTracks([id])).catch(() => setFav(!newFav))
-  }, [sdkLive, s])
+    if (uri) void setSavedTrack(uri, !savedTrackUris.has(uri)).catch(() => {})
+  }, [sdkLive, s, savedTrackUris, setSavedTrack])
 
   const toggleShuffle = useCallback(() => {
     const nextShuffle = !shuffle

@@ -22,6 +22,7 @@ export interface LibraryState {
   songs: SongEntry[]
   playlists: Playlist[]
   likedTrackUris: Set<string>
+  savedTrackUris: Set<string>
   artistIdByName: Map<string, string>
   userId: string | null
   loading: boolean
@@ -33,6 +34,8 @@ export interface LibraryState {
 export interface Library extends LibraryState {
   loadMore: (kind: LibraryPageKind) => void
   loadMorePlaylistTracks: (playlistId: string) => void
+  checkSavedTrackUris: (uris: string[]) => void
+  setSavedTrack: (uri: string, saved: boolean) => Promise<void>
   setSavedAlbum: (album: Album, saved: boolean) => void
 }
 
@@ -43,6 +46,7 @@ export const EMPTY_LIBRARY_STATE: LibraryState = {
   songs: [],
   playlists: [],
   likedTrackUris: new Set(),
+  savedTrackUris: new Set(),
   artistIdByName: new Map(),
   userId: null,
   loading: false,

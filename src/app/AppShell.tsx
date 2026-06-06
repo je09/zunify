@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { Activity, useRef, useState } from 'react'
 import { usePlayback } from '../hooks/usePlayback'
 import { useTheme } from '../hooks/useTheme'
 import { useNavigationStack } from './navigation/useNavigationStack'
@@ -45,6 +45,8 @@ export function AppShell({ token, onLogout }: AppShellProps) {
   const [controls] = useState<'top' | 'bottom'>('top')
   const artistPlayRequestRef = useRef(0)
 
+  const push = (frame: NavFrame) => nav.push(frame)
+
   const updateTab = (tab: number) =>
     nav.updateCurrent(frame => 'tab' in frame ? { ...frame, tab } : frame)
 
@@ -52,7 +54,7 @@ export function AppShell({ token, onLogout }: AppShellProps) {
     if (queue.length === 0 && !contextUri) return
     artistPlayRequestRef.current += 1
     pb.play(queue, idx, contextUri)
-    nav.push({ screen: 'nowplaying' })
+    push({ screen: 'nowplaying' })
   }
 
   const playArtistTopTracks = (artistId: string, fallbackQueue: Track[]) => {
@@ -70,143 +72,140 @@ export function AppShell({ token, onLogout }: AppShellProps) {
       })
   }
 
-  let body: JSX.Element
+  const renderFrame = (frame: NavFrame) => {
+    switch (frame.screen) {
+      case 'home':
+        return (
+          <Hub
+            pb={pb}
+            token={token}
+            onOpenCollection={(tab) => push({ screen: 'collection', tab })}
+            onOpenNowPlaying={() => push({ screen: 'nowplaying' })}
+            onShuffle={() => {
+              void (async () => {
+                if (!token) {
+                  setSdkError('Spotify login required for shuffle.')
+                  return
+                }
+                const id = userId ?? (await fetchCurrentUser()).id
+                const contextUri = `spotify:user:${id}:collection`
+                void spotifyEngine?.player.activateElement()
+                if (spotifyEngine) await spotifyEngine.setShuffle(true)
+                else await setShuffleState(true)
+                playAndGo([], 0, contextUri)
+                window.setTimeout(() => {
+                  void (spotifyEngine ? spotifyEngine.setShuffle(true) : setShuffleState(true))
+                    .catch(e => setSdkError(`Spotify shuffle failed: ${e instanceof Error ? e.message : String(e)}`))
+                }, 500)
+              })().catch(e => setSdkError(`Spotify shuffle failed: ${e instanceof Error ? e.message : String(e)}`))
+            }}
+            onSearch={() => push({ screen: 'search' })}
+            onChangeLooks={() => setOverlay('looks')}
+            onConnectSpotify={() => setOverlay('spotify')}
+            spotify={Boolean(token)}
+          />
+        )
 
-  switch (nav.current.screen) {
-    case 'home':
-      body = (
-        <Hub
-          pb={pb}
-          token={token}
-          onOpenCollection={(tab) => nav.push({ screen: 'collection', tab })}
-          onOpenNowPlaying={() => nav.push({ screen: 'nowplaying' })}
-          onShuffle={() => {
-            void (async () => {
-              if (!token) {
-                setSdkError('Spotify login required for shuffle.')
-                return
+      case 'search':
+        return (
+          <Search
+            onBack={nav.back}
+            onOpenAlbum={(album) => push({ screen: 'album', album, tab: 0 })}
+            onOpenArtist={(name, artistId) => push({ screen: 'artist', name, artistId, tab: 0 })}
+            onPlayTrack={(track) => playAndGo([track], 0)}
+          />
+        )
+
+      case 'collection':
+        return (
+          <Collection
+            tab={frame.tab}
+            onTabChange={updateTab}
+            onOpenArtist={(name, artistId) => push({ screen: 'artist', name, artistId, tab: 0 })}
+            onOpenAlbum={(album) => push({ screen: 'album', album, tab: 0 })}
+            onOpenPlaylist={(playlist) => push({ screen: 'playlist', playlist })}
+            onPlay={playAndGo}
+            onPlayArtist={playArtistTopTracks}
+            onBack={nav.back}
+          />
+        )
+
+      case 'artist':
+        return (
+          <ArtistCard
+            name={frame.name}
+            artistId={frame.artistId}
+            tab={frame.tab}
+            onTabChange={updateTab}
+            onOpenAlbum={(album) => push({ screen: 'album', album, tab: 0 })}
+            onPlay={playAndGo}
+            onBack={nav.back}
+          />
+        )
+
+      case 'album':
+        return (
+          <AlbumDetail
+            album={frame.album}
+            tab={frame.tab}
+            onTabChange={updateTab}
+            onOpenAlbum={(album) => push({ screen: 'album', album, tab: 0 })}
+            onOpenArtist={(name, artistId) => push({ screen: 'artist', name, artistId, tab: 0 })}
+            onPlay={playAndGo}
+            onBack={nav.back}
+          />
+        )
+
+      case 'playlist':
+        return (
+          <PlaylistDetail
+            playlist={frame.playlist}
+            onPlay={playAndGo}
+            onBack={nav.back}
+          />
+        )
+
+      case 'nowplaying': {
+        const track = pb.track
+        return (
+          <Player
+            pb={pb}
+            onBack={nav.back}
+            controls={controls}
+            onGoToAlbum={track.albumID && track.artist ? () => {
+              const albumID = track.albumID as string
+              const lightAlbum: Album = {
+                id: albumID,
+                artist: track.artist,
+                title: track.album,
+                year: 0,
+                color: track.color,
+                imageUrl: track.imageUrl,
+                tracks: [],
               }
-              const id = userId ?? (await fetchCurrentUser()).id
-              const contextUri = `spotify:user:${id}:collection`
-              void spotifyEngine?.player.activateElement()
-              if (spotifyEngine) await spotifyEngine.setShuffle(true)
-              else await setShuffleState(true)
-              playAndGo([], 0, contextUri)
-              window.setTimeout(() => {
-                void (spotifyEngine ? spotifyEngine.setShuffle(true) : setShuffleState(true))
-                  .catch(e => setSdkError(`Spotify shuffle failed: ${e instanceof Error ? e.message : String(e)}`))
-              }, 500)
-            })().catch(e => setSdkError(`Spotify shuffle failed: ${e instanceof Error ? e.message : String(e)}`))
-          }}
-          onSearch={() => nav.push({ screen: 'search' })}
-          onChangeLooks={() => setOverlay('looks')}
-          onConnectSpotify={() => setOverlay('spotify')}
-          spotify={Boolean(token)}
-        />
-      )
-      break
-
-    case 'search':
-      body = (
-        <Search
-          onBack={nav.back}
-          onOpenAlbum={(album) => nav.push({ screen: 'album', album, tab: 0 })}
-          onOpenArtist={(name, artistId) => nav.push({ screen: 'artist', name, artistId, tab: 0 })}
-          onPlayTrack={(track) => playAndGo([track], 0)}
-        />
-      )
-      break
-
-    case 'collection':
-      body = (
-        <Collection
-          tab={nav.current.tab}
-          onTabChange={updateTab}
-          onOpenArtist={(name, artistId) => nav.push({ screen: 'artist', name, artistId, tab: 0 })}
-          onOpenAlbum={(album) => nav.push({ screen: 'album', album, tab: 0 })}
-          onOpenPlaylist={(playlist) => nav.push({ screen: 'playlist', playlist })}
-          onPlay={playAndGo}
-          onPlayArtist={playArtistTopTracks}
-          onBack={nav.back}
-        />
-      )
-      break
-
-    case 'artist':
-      body = (
-        <ArtistCard
-          name={nav.current.name}
-          artistId={nav.current.artistId}
-          tab={nav.current.tab}
-          onTabChange={updateTab}
-          onOpenAlbum={(album) => nav.push({ screen: 'album', album, tab: 0 })}
-          onPlay={playAndGo}
-          onBack={nav.back}
-        />
-      )
-      break
-
-    case 'album':
-      body = (
-        <AlbumDetail
-          album={nav.current.album}
-          tab={nav.current.tab}
-          onTabChange={updateTab}
-          onOpenAlbum={(album) => nav.push({ screen: 'album', album, tab: 0 })}
-          onOpenArtist={(name, artistId) => nav.push({ screen: 'artist', name, artistId, tab: 0 })}
-          onPlay={playAndGo}
-          onBack={nav.back}
-        />
-      )
-      break
-
-    case 'playlist':
-      body = (
-        <PlaylistDetail
-          playlist={nav.current.playlist}
-          onPlay={playAndGo}
-          onBack={nav.back}
-        />
-      )
-      break
-
-    case 'nowplaying': {
-      const track = pb.track
-      body = (
-        <Player
-          pb={pb}
-          onBack={nav.back}
-          controls={controls}
-          onGoToAlbum={track.albumID && track.artist ? () => {
-            const albumID = track.albumID as string
-            const lightAlbum: Album = {
-              id: albumID,
-              artist: track.artist,
-              title: track.album,
-              year: 0,
-              color: track.color,
-              imageUrl: track.imageUrl,
-              tracks: [],
-            }
-            nav.push({ screen: 'album', album: lightAlbum, tab: 0 })
-          } : undefined}
-          onGoToArtist={track.artist ? () => {
-            setTimeout(() => {
-              nav.push({ screen: 'artist', name: track.artist, artistId: track.artistId, tab: 0 })
-            }, 70)
-          } : undefined}
-        />
-      )
-      break
+              push({ screen: 'album', album: lightAlbum, tab: 0 })
+            } : undefined}
+            onGoToArtist={track.artist ? () => {
+              setTimeout(() => {
+                push({ screen: 'artist', name: track.artist, artistId: track.artistId, tab: 0 })
+              }, 70)
+            } : undefined}
+          />
+        )
+      }
     }
   }
 
   return (
     <div className={`app-shell theme-${theme.mode}`} id="app-shell">
       <div className="screen-content">
-        <div className={`screen-in screen-${nav.direction}`} key={nav.key}>
-          {body}
-        </div>
+        {nav.stack.map(entry => (
+          <Activity key={entry.id} mode={entry.id === nav.key ? 'visible' : 'hidden'}>
+            <div className={`screen-in screen-${entry.id === nav.key ? nav.direction : 'fwd'}`}>
+              {renderFrame(entry.frame)}
+            </div>
+          </Activity>
+        ))}
       </div>
       <ContextMenuHost />
       {overlay === 'looks' && (

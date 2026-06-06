@@ -18,10 +18,11 @@ interface Props {
   onShuffle: () => void
   onChangeLooks: () => void
   onConnectSpotify: () => void
+  onAbout: () => void
   spotify: boolean
 }
 
-export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onSearch, onShuffle, onChangeLooks, onConnectSpotify, spotify }: Props) {
+export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onSearch, onShuffle, onChangeLooks, onConnectSpotify, onAbout, spotify }: Props) {
   const stripRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLDivElement>(null)
   const home = useHubData(token)
@@ -37,6 +38,7 @@ export function Hub({ pb, token, onOpenCollection, onOpenNowPlaying, onSearch, o
       items: [
         { label: 'change looks', onClick: onChangeLooks },
         { label: spotify ? 'spotify connected' : 'connect to spotify', onClick: onConnectSpotify },
+        { label: 'about', onClick: onAbout },
       ],
       origin: { x: e.clientX, y: e.clientY },
     })

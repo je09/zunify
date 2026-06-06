@@ -15,6 +15,7 @@ import { PlaylistDetail } from '../screens/PlaylistDetail'
 import { Player } from '../screens/Player'
 import { Settings } from '../features/settings/Settings'
 import { LooksScreen } from '../features/settings/LooksScreen'
+import { AboutScreen } from '../features/settings/AboutScreen'
 import { ContextMenuHost } from '../components/ContextMenu'
 
 type NavFrame =
@@ -26,7 +27,7 @@ type NavFrame =
   | { screen: 'playlist'; playlist: Playlist }
   | { screen: 'nowplaying' }
 
-type Overlay = 'looks' | 'spotify' | null
+type Overlay = 'looks' | 'spotify' | 'about' | null
 
 interface AppShellProps {
   token: string | null
@@ -102,6 +103,7 @@ export function AppShell({ token, onLogout }: AppShellProps) {
             onSearch={() => push({ screen: 'search' })}
             onChangeLooks={() => setOverlay('looks')}
             onConnectSpotify={() => setOverlay('spotify')}
+            onAbout={() => setOverlay('about')}
             spotify={Boolean(token)}
           />
         )
@@ -226,6 +228,7 @@ export function AppShell({ token, onLogout }: AppShellProps) {
           onClose={() => setOverlay(null)}
         />
       )}
+      {overlay === 'about' && <AboutScreen onBack={() => setOverlay(null)} />}
     </div>
   )
 }

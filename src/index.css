@@ -541,6 +541,7 @@ body {
 
 /* LooksScreen */
 .ov-looks .scroll { padding: 0 26px; }
+.ov-about .scroll { padding: 0 26px; }
 .looks-bg { display: flex; gap: 30px; padding: 4px 0 6px; }
 .looks-opt {
   background: none; border: none; cursor: pointer; font-family: inherit;
@@ -553,6 +554,10 @@ body {
 .acc-tile.on { outline: 3px solid var(--fg); outline-offset: 3px; }
 .acc-check { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 30px; font-weight: 700; }
 .acc-name { font-size: 18px; font-weight: 300; color: var(--dim); padding: 14px 0 0; text-transform: lowercase; }
+.about-copy { font-size: 27px; font-weight: 300; line-height: 1.2; color: var(--fg); max-width: 320px; }
+.about-value { font-size: 40px; font-weight: 250; color: var(--fg); letter-spacing: -.5px; }
+.about-link { display: block; color: var(--accent); font-size: 25px; font-weight: 300; line-height: 1.2; text-decoration: none; word-break: break-word; }
+.about-link:active { opacity: .65; }
 
 /* SpotifyScreen */
 .ov-spotify { display: flex; flex-direction: column; height: 100%; }

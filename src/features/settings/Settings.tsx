@@ -3,13 +3,6 @@ import { getClientId, getRedirectUri, setClientId } from "../../spotifyConfig";
 import { startLogin } from "../auth/spotifyAuth";
 import { Icons } from "../../components/icons";
 
-const buildDateValue = (
-  import.meta as unknown as { env?: { VITE_BUILD_DATE?: string } }
-).env?.VITE_BUILD_DATE;
-const buildDate = buildDateValue
-  ? new Date(buildDateValue).toLocaleString()
-  : "dev";
-
 interface Props {
   token: string | null;
   sdkError: string | null;
@@ -94,7 +87,6 @@ export function Settings({
                   done
                 </button>
               </div>
-              <div className="sp-foot">build: {buildDate}</div>
             </>
           ) : (
             <>
@@ -150,7 +142,6 @@ export function Settings({
                   cancel
                 </button>
               </div>
-              <div className="sp-foot">build: {buildDate}</div>
               <div className="sp-foot">
                 you can revoke access anytime in settings
               </div>

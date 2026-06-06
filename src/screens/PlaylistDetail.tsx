@@ -12,7 +12,7 @@ interface Props {
 }
 
 export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
-  const { playlists, loadingMore, loadMorePlaylistTracks } = useLibrary()
+  const { playlists, loadingMore, likedTrackUris, loadMorePlaylistTracks } = useLibrary()
   const current = playlists.find(pl => pl.id === playlist.id) ?? playlist
   const queue = playlistQueue(current)
   const queueIds = queue.map(t => t.spotifyUri ?? `${t.artist}:${t.title}`).join('\u0000')
@@ -20,7 +20,7 @@ export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
 
   const isSpotifyPlaylist = current.id !== 'sp_liked' && queue.some(t => t.spotifyUri)
   const contextUri = isSpotifyPlaylist ? `spotify:playlist:${current.id}` : undefined
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
+  const [savedIds, setSavedIds] = useState<Set<string>>(() => savedTrackIdsFromCache(queue, likedTrackUris))
 
   useEffect(() => {
     if (queue.length || !current.trackNextUrl || loadingMore.playlistTracks[current.id]) return
@@ -29,6 +29,7 @@ export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
 
   useEffect(() => {
     if (!queue.length) { setSavedIds(new Set()); return }
+    setSavedIds(savedTrackIdsFromCache(queue, likedTrackUris))
     const ids = queue.map(t => t.spotifyUri?.split(':')[2]).filter(Boolean) as string[]
     if (!ids.length) { setSavedIds(new Set()); return }
 
@@ -37,7 +38,7 @@ export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
       .then(saved => { if (!cancelled) setSavedIds(new Set(ids.filter((_, i) => saved[i]))) })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [queueIds, queue])
+  }, [queueIds, queue, likedTrackUris])
 
   return (
     <div className="page">
@@ -88,6 +89,14 @@ export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
       <BottomBack onBack={onBack} />
     </div>
   )
+}
+
+function savedTrackIdsFromCache(queue: Track[], likedTrackUris: Set<string>): Set<string> {
+  return new Set(queue
+    .map(t => t.spotifyUri)
+    .filter((uri): uri is string => Boolean(uri && likedTrackUris.has(uri)))
+    .map(uri => uri.split(':')[2])
+    .filter(Boolean))
 }
 
 function toggleSave(

@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react'
-import type { ArtistSummary } from './data'
+import type { Album, ArtistSummary } from './data'
 import {
   fetchSavedAlbumsPage, fetchUserPlaylistsPage, fetchLikedTracksPage,
   fetchPlaylistTracksPage, fetchCurrentUser, fetchFollowedArtists,
@@ -14,7 +14,7 @@ const noop = () => {}
 
 const EMPTY: Library = {
   ...EMPTY_LIBRARY_STATE,
-  loadMore: noop, loadMorePlaylistTracks: noop,
+  loadMore: noop, loadMorePlaylistTracks: noop, setSavedAlbum: noop,
 }
 
 const LibraryContext = createContext<Library>(EMPTY)
@@ -154,6 +154,11 @@ export function LibraryProvider({ token, children }: Props) {
       })
   }, [])
 
+  const setSavedAlbum = useCallback((album: Album, saved: boolean) => {
+    if (!album.id) return
+    dispatch({ type: 'set-saved-album', album, saved, userId: userIdRef.current, followedArtists: followedArtistsRef.current })
+  }, [])
+
   useEffect(() => {
     tokenRef.current = token
     requestGenRef.current += 1
@@ -216,7 +221,8 @@ export function LibraryProvider({ token, children }: Props) {
     ...lib,
     loadMore,
     loadMorePlaylistTracks,
-  }), [lib, loadMore, loadMorePlaylistTracks])
+    setSavedAlbum,
+  }), [lib, loadMore, loadMorePlaylistTracks, setSavedAlbum])
 
   return (
     <LibraryContext.Provider value={value}>

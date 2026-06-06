@@ -54,6 +54,21 @@ export async function checkSavedTracks(ids: string[]): Promise<boolean[]> {
   return results.flat()
 }
 
+export async function checkSavedAlbums(ids: string[]): Promise<boolean[]> {
+  if (!ids.length) return []
+  return spotifyGet<boolean[]>(`/me/albums/contains?ids=${ids.join(',')}`)
+}
+
+export async function saveAlbums(ids: string[]): Promise<void> {
+  if (!ids.length) return
+  return spotifyMutate('PUT', '/me/albums', { ids })
+}
+
+export async function removeAlbums(ids: string[]): Promise<void> {
+  if (!ids.length) return
+  return spotifyMutate('DELETE', '/me/albums', { ids })
+}
+
 export async function saveTracks(ids: string[]): Promise<void> {
   return spotifyMutate('PUT', '/me/tracks', { ids })
 }

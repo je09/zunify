@@ -50,6 +50,45 @@ describe('libraryReducer', () => {
     expect(next.albums.map(a => a.id)).toEqual(['a1'])
   })
 
+  it('adds a saved album to library albums', () => {
+    const next = libraryReducer(state({ totals: { albums: 1, songs: null, playlists: null } }), {
+      type: 'set-saved-album',
+      album: album('a1'),
+      saved: true,
+      userId: 'user',
+      followedArtists: [],
+    })
+
+    expect(next.albums.map(a => a.id)).toEqual(['a1'])
+    expect(next.totals.albums).toBe(2)
+  })
+
+  it('does not duplicate an already saved album', () => {
+    const next = libraryReducer(state({ albums: [album('a1')], totals: { albums: 1, songs: null, playlists: null } }), {
+      type: 'set-saved-album',
+      album: album('a1'),
+      saved: true,
+      userId: 'user',
+      followedArtists: [],
+    })
+
+    expect(next.albums.map(a => a.id)).toEqual(['a1'])
+    expect(next.totals.albums).toBe(1)
+  })
+
+  it('removes an unsaved album from library albums', () => {
+    const next = libraryReducer(state({ albums: [album('a1'), album('a2')], totals: { albums: 2, songs: null, playlists: null } }), {
+      type: 'set-saved-album',
+      album: album('a1'),
+      saved: false,
+      userId: 'user',
+      followedArtists: [],
+    })
+
+    expect(next.albums.map(a => a.id)).toEqual(['a2'])
+    expect(next.totals.albums).toBe(1)
+  })
+
   it('preserves playlist-track loading flags when appending tracks', () => {
     const loadingMore = { albums: false, playlists: false, tracks: false, playlistTracks: { p1: true } }
     const next = libraryReducer(state({ playlists: [playlist('p1')], loadingMore }), {

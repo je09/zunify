@@ -1,4 +1,4 @@
-import { ArtistSummary, Playlist } from '../../data'
+import { Album, ArtistSummary, Playlist } from '../../data'
 import { buildLibrary, likedSongsPlaylist, mergeAlbums, mergePlaylists, mergeTracks } from './librarySelectors'
 import { EMPTY_LIBRARY_STATE, LibraryPageKind, LibraryState, LibraryTotals } from './libraryTypes'
 
@@ -10,6 +10,7 @@ export type LibraryAction =
   | { type: 'set-loading-more'; kind: LibraryPageKind; loading: boolean }
   | { type: 'set-playlist-tracks-loading'; playlistId: string; loading: boolean }
   | { type: 'append-albums'; items: LibraryState['albums']; total: number | null; userId: string | null; followedArtists: ArtistSummary[] }
+  | { type: 'set-saved-album'; album: Album; saved: boolean; userId: string | null; followedArtists: ArtistSummary[] }
   | { type: 'append-liked-tracks'; items: LibraryState['playlists'][number]['tracks']; total: number | null; next: string | null; userId: string | null; followedArtists: ArtistSummary[] }
   | { type: 'append-playlists'; items: Playlist[]; total: number | null; likedTotal: number | null | undefined; userId: string | null; followedArtists: ArtistSummary[] }
   | { type: 'append-playlist-tracks'; playlistId: string; items: LibraryState['playlists'][number]['tracks']; total: number | null; next: string | null; userId: string | null; followedArtists: ArtistSummary[] }
@@ -45,6 +46,19 @@ export function libraryReducer(state: LibraryState, action: LibraryAction): Libr
       const albums = mergeAlbums(state.albums, action.items)
       const totals: LibraryTotals = { ...state.totals, albums: action.total ?? state.totals.albums }
       return keepTransientState(state, buildLibrary(albums, state.playlists, totals, action.userId, action.followedArtists))
+    }
+
+    case 'set-saved-album': {
+      const exists = state.albums.some(album => album.id === action.album.id)
+      const albums = action.saved
+        ? mergeAlbums(state.albums, [action.album])
+        : state.albums.filter(album => album.id !== action.album.id)
+      const total = state.totals.albums == null
+        ? state.totals.albums
+        : action.saved
+          ? state.totals.albums + (exists ? 0 : 1)
+          : Math.max(0, state.totals.albums - (exists ? 1 : 0))
+      return keepTransientState(state, buildLibrary(albums, state.playlists, { ...state.totals, albums: total }, action.userId, action.followedArtists))
     }
 
     case 'append-liked-tracks': {

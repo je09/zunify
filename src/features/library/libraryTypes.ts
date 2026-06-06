@@ -33,6 +33,7 @@ export interface LibraryState {
 export interface Library extends LibraryState {
   loadMore: (kind: LibraryPageKind) => void
   loadMorePlaylistTracks: (playlistId: string) => void
+  setSavedAlbum: (album: Album, saved: boolean) => void
 }
 
 export const EMPTY_LIBRARY_STATE: LibraryState = {

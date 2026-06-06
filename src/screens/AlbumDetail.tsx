@@ -14,7 +14,7 @@ interface Props {
 }
 
 export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist, onPlay, onBack }: Props) {
-  const { fullAlbum, savedIds, otherAlbums, loadingEnrich, queue, contextUri, toggleSave } = useAlbumDetail(album)
+  const { fullAlbum, savedIds, albumSaved, otherAlbums, loadingEnrich, queue, contextUri, toggleSave, toggleAlbumSave } = useAlbumDetail(album)
 
   const swipe = useSwipe(
     () => tab === 0 ? onBack() : onTabChange(0),
@@ -40,10 +40,20 @@ export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist
               >
                 {fullAlbum.artist}
               </div>
-              <button className="al-playall" style={{ marginTop: 8 }} onClick={() => onPlay(queue, 0, contextUri)}>
-                {Icons.play}
-                <span>play</span>
-              </button>
+              <div className="al-actions">
+                <button className="al-playall" onClick={() => onPlay(queue, 0, contextUri)}>
+                  {Icons.play}
+                  <span>play</span>
+                </button>
+                <button
+                  className={'al-playall ' + (albumSaved ? 'saved' : '')}
+                  onClick={toggleAlbumSave}
+                  aria-label={albumSaved ? 'Unsave album' : 'Save album'}
+                >
+                  {Icons.heart}
+                  <span>{albumSaved ? 'saved' : 'save'}</span>
+                </button>
+              </div>
             </div>
           </div>
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Track, Album, ArtistSummary, Playlist, SongEntry, albumQueue } from '../data'
 import { Section, Thumb, WP8Spinner } from '../components/Pivot'
 import { FadeImage } from '../components/FadeImage'
@@ -56,17 +56,32 @@ export function buildGenresFromArtists(artists: ArtistSummary[], albums: Album[]
     })
 }
 
-function LoadMoreSentinel({ active, loading, onLoadMore }: { active: boolean; loading: boolean; onLoadMore: () => void }) {
+function LoadMoreSentinel({ active, loading, onLoadMore, preserveAnchor = false, anchorKey }: {
+  active: boolean; loading: boolean; onLoadMore: () => void; preserveAnchor?: boolean; anchorKey?: number
+}) {
   const ref = useRef<HTMLDivElement>(null)
+  const anchorTopRef = useRef<number | null>(null)
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!preserveAnchor || !el || anchorTopRef.current === null) return
+    const top = el.getBoundingClientRect().top
+    window.scrollBy(0, top - anchorTopRef.current)
+    anchorTopRef.current = null
+  }, [anchorKey, preserveAnchor])
+
   useEffect(() => {
     const el = ref.current
     if (!active || !el) return
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting && !loading) onLoadMore()
+      if (entry.isIntersecting && !loading) {
+        if (preserveAnchor) anchorTopRef.current = el.getBoundingClientRect().top
+        onLoadMore()
+      }
     }, { rootMargin: '240px 0px' })
     observer.observe(el)
     return () => observer.disconnect()
-  }, [active, loading, onLoadMore])
+  }, [active, loading, onLoadMore, preserveAnchor])
   return <div ref={ref} style={{ minHeight: 80 }}>{loading ? <WP8Spinner /> : null}</div>
 }
 
@@ -110,7 +125,7 @@ export function ArtistsTab({ artists, albumsByArtist, artistIdByName, hasMore, l
           })}
         </div>
       ))}
-      <LoadMoreSentinel active={hasMore} loading={loadingMore} onLoadMore={onLoadMore} />
+      <LoadMoreSentinel active={hasMore} loading={loadingMore} onLoadMore={onLoadMore} preserveAnchor anchorKey={artists.length} />
     </div>
   )
 }

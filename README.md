@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img alt="React" src="https://img.shields.io/badge/React-18-61dafb?style=for-the-badge&logo=react&logoColor=111" />
+  <img alt="React" src="https://img.shields.io/badge/React-19-61dafb?style=for-the-badge&logo=react&logoColor=111" />
   <img alt="Vite" src="https://img.shields.io/badge/Vite-8-646cff?style=for-the-badge&logo=vite&logoColor=fff" />
   <img alt="Spotify" src="https://img.shields.io/badge/Spotify-Web_API-1db954?style=for-the-badge&logo=spotify&logoColor=fff" />
   <img alt="Cloudflare" src="https://img.shields.io/badge/Cloudflare-Workers-f38020?style=for-the-badge&logo=cloudflare&logoColor=fff" />
@@ -134,6 +134,11 @@ Then paste the Client ID in zunify settings and authorize Spotify.
 | `npm run test` | Run Vitest tests. |
 | `npm run quality` | Run lint, build, and tests. |
 | `npm run deploy` | Build and deploy with Wrangler. |
+
+## Tech Notes
+
+- Built with React 19 and Vite 8.
+- Navigation uses a small in-app stack. Previous screens stay buffered with React `Activity`, so going back preserves scroll position and loaded list state without manually restoring pixels.
 
 ## Deploy
 

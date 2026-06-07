@@ -13,6 +13,10 @@ export async function fetchSavedAlbumsPage(cursor = `/me/albums?limit=${LIBRARY_
   }
 }
 
+export function fetchSavedAlbumsPageAt(offset: number): Promise<SpotifyPage<Album>> {
+  return fetchSavedAlbumsPage(`/me/albums?limit=${LIBRARY_BATCH_LIMIT}&offset=${Math.max(0, offset)}`)
+}
+
 export async function fetchLikedTracksPage(cursor = `/me/tracks?limit=${TRACK_BATCH_LIMIT}`): Promise<SpotifyPage<Track>> {
   const page = await spotifyPage<{ track: SpTrack | null }>(cursor)
   return {
@@ -20,6 +24,10 @@ export async function fetchLikedTracksPage(cursor = `/me/tracks?limit=${TRACK_BA
     next: page.next,
     total: page.total,
   }
+}
+
+export function fetchLikedTracksPageAt(offset: number): Promise<SpotifyPage<Track>> {
+  return fetchLikedTracksPage(`/me/tracks?limit=${TRACK_BATCH_LIMIT}&offset=${Math.max(0, offset)}`)
 }
 
 export async function fetchUserPlaylistsPage(cursor = `/me/playlists?limit=${LIBRARY_BATCH_LIMIT}`): Promise<SpotifyPage<Playlist>> {
@@ -31,6 +39,10 @@ export async function fetchUserPlaylistsPage(cursor = `/me/playlists?limit=${LIB
   }
 }
 
+export function fetchUserPlaylistsPageAt(offset: number): Promise<SpotifyPage<Playlist>> {
+  return fetchUserPlaylistsPage(`/me/playlists?limit=${LIBRARY_BATCH_LIMIT}&offset=${Math.max(0, offset)}`)
+}
+
 export async function fetchPlaylistTracksPage(playlistId: string, cursor?: string | null): Promise<SpotifyPage<Track>> {
   const page = await spotifyPage<{ track: SpTrack | null }>(
     cursor ?? `/playlists/${playlistId}/tracks?limit=${TRACK_BATCH_LIMIT}&fields=items(track(type,uri,name,duration_ms,preview_url,artists,album(id,name,images,artists))),next,total`
@@ -40,6 +52,13 @@ export async function fetchPlaylistTracksPage(playlistId: string, cursor?: strin
     next: page.next,
     total: page.total,
   }
+}
+
+export function fetchPlaylistTracksPageAt(playlistId: string, offset: number): Promise<SpotifyPage<Track>> {
+  return fetchPlaylistTracksPage(
+    playlistId,
+    `/playlists/${playlistId}/tracks?limit=${TRACK_BATCH_LIMIT}&offset=${Math.max(0, offset)}&fields=items(track(type,uri,name,duration_ms,preview_url,artists,album(id,name,images,artists))),next,total`,
+  )
 }
 
 export async function fetchAlbum(id: string): Promise<Album | null> {

@@ -157,9 +157,12 @@ body {
   flex: 1; overflow-y: auto; overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
 }
-.scroll::-webkit-scrollbar { display: none; }
+.scroll::-webkit-scrollbar { width: 4px; }
+.scroll::-webkit-scrollbar-track { background: transparent; }
+.scroll::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 0; }
 
 /* ── PivotArea ───────────────────────────────────────────────────────────── */
 .pivot-area {
@@ -170,11 +173,14 @@ body {
   position: absolute; inset: 0;
   overflow-y: auto; overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
   /* sticky index-tile resolves against this scroll container */
   overflow-anchor: none;
 }
-.pivot-pane::-webkit-scrollbar { display: none; }
+.pivot-pane::-webkit-scrollbar { width: 4px; }
+.pivot-pane::-webkit-scrollbar-track { background: transparent; }
+.pivot-pane::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 0; }
 
 @media (prefers-reduced-motion: no-preference) {
   .pivot-exit-fwd  { animation: pivotExitL  240ms ease-out forwards; }
@@ -270,6 +276,42 @@ body {
 .pl-name  { font-size: 25px; font-weight: 300; line-height: 1.1; }
 .pl-count { font-size: 17px; font-weight: 300; color: var(--dim); margin-top: 4px; }
 .pl-meta  { min-width: 0; }
+.collection-virtual { position: relative; }
+.collection-virtual-row { position: absolute; left: 0; right: 0; top: 0; height: 106px; }
+.collection-virtual-row > :is(.album-row, .pl-row) { height: 106px; margin-bottom: 0; }
+.virtual-load-error {
+  width: 100%; height: 100%; border: 0; background: transparent; color: var(--dim);
+  font: inherit; font-size: 18px; font-weight: 300; text-align: left; cursor: pointer;
+}
+.virtual-load-error:active { color: var(--accent); }
+
+/* ── Incremental skeletons ───────────────────────────────────────────────── */
+.load-more-slot { min-height: 80px; }
+.skeleton-row { pointer-events: none; cursor: default; }
+.skeleton-block,
+.skeleton-art,
+.skeleton-circle {
+  display: block;
+  background: rgba(255,255,255,.16);
+  animation: skeletonPulse 1.25s ease-in-out infinite;
+}
+.theme-light .skeleton-block,
+.theme-light .skeleton-art,
+.theme-light .skeleton-circle {
+  background: rgba(0,0,0,.13);
+}
+.skeleton-circle { width: 44px; height: 44px; flex: 0 0 auto; }
+.skeleton-art { width: 88px; height: 88px; flex: 0 0 auto; }
+.skeleton-line { width: min(76%, 260px); height: 28px; }
+.skeleton-title { width: min(72%, 260px); height: 24px; }
+.skeleton-sub { width: min(46%, 180px); height: 16px; margin-top: 8px; }
+.skeleton-num { width: 18px; height: 18px; }
+.skeleton-time { width: 42px; height: 16px; }
+.skeleton-row .album-meta,
+.skeleton-row .pl-meta { flex: 1; }
+.skeleton-row .al-ttitle { flex: 1; }
+.skeleton-track-meta { flex: 1; min-width: 0; }
+@keyframes skeletonPulse { 0%, 100% { opacity: .46; } 50% { opacity: .9; } }
 
 /* ── Hub (home panorama) ──────────────────────────────────────────────────── */
 .hub         { position: relative; height: 100%; overflow: hidden; }
@@ -292,9 +334,12 @@ body {
   flex: 0 0 446px; height: 100%;
   padding: 150px 26px 96px;
   overflow-y: auto; overflow-x: hidden;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.75) transparent;
 }
-.pane::-webkit-scrollbar { display: none; }
+.pane::-webkit-scrollbar { width: 4px; }
+.pane::-webkit-scrollbar-track { background: transparent; }
+.pane::-webkit-scrollbar-thumb { background: rgba(255,255,255,.75); border-radius: 0; }
 .pane-head   { font-size: 40px; font-weight: 250; color: var(--fg); line-height: 1; }
 .hub-menu    { margin-top: 18px; display: flex; flex-direction: column; align-items: flex-start; }
 .hub-item    {
@@ -398,6 +443,12 @@ body {
 .al-playall .icon svg { width: 20px; height: 20px; display: block; }
 .track-list   { padding: 0 26px; }
 .al-track     { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); cursor: pointer; min-height: 48px; }
+.playlist-virtual { position: relative; }
+.playlist-virtual-row { position: absolute; left: 0; right: 0; top: 0; height: 73px; }
+.playlist-virtual-row,
+.collection-virtual-row { animation: none !important; }
+.playlist-virtual-row > .al-track { height: 73px; }
+.playlist-virtual-row .al-track { padding-top: 12px; padding-bottom: 12px; }
 .al-tnum      { width: 20px; color: var(--dim); font-size: 18px; flex-shrink: 0; }
 .al-ttitle    { flex: 1; font-size: 22px; font-weight: 300; }
 .al-tdur      { color: var(--dim); font-size: 16px; flex-shrink: 0; }

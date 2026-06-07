@@ -23,17 +23,14 @@ export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpen
     () => tab === 0 ? onBack() : onTabChange(tab - 1),
     () => onTabChange(Math.min(TABS.length - 1, tab + 1)),
   )
-  const userPlaylistCount = playlists.filter(pl => pl.id !== 'sp_liked').length
   const likedTrackCount = playlists.find(pl => pl.id === 'sp_liked')?.tracks?.length ?? 0
   const albumsByArtist = useMemo(() => groupAlbumsByArtist(albums), [albums])
 
   useEffect(() => {
     if (loading) return
-    if (tab === 1 && hasMore(albums.length, totals.albums) && !loadingMore.albums) loadMore('albums')
     if (tab === 0 && likedTrackCount < 50 && hasMore(likedTrackCount, totals.songs) && !loadingMore.tracks) loadMore('tracks')
     if (tab === 2 && likedTrackCount < 50 && hasMore(likedTrackCount, totals.songs) && !loadingMore.tracks) loadMore('tracks')
-    if (tab === 4 && userPlaylistCount < 20 && hasMore(userPlaylistCount, totals.playlists) && !loadingMore.playlists) loadMore('playlists')
-  }, [tab, albums.length, totals.albums, likedTrackCount, totals.songs, userPlaylistCount, totals.playlists, loading, loadingMore.albums, loadingMore.tracks, loadingMore.playlists, loadMore])
+  }, [tab, albums.length, totals.albums, likedTrackCount, totals.songs, loading, loadingMore.albums, loadingMore.tracks, loadMore])
 
   if (loading) return <WP8Loading />
   if (error) return <WP8Error message={error} />
@@ -44,10 +41,10 @@ export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpen
       <Pivot tabs={TABS} active={tab} onChange={onTabChange} />
       <PivotArea tab={tab} ref={swipe}>
         <ArtistsTab artists={artists} albumsByArtist={albumsByArtist} artistIdByName={artistIdByName} hasMore={hasMore(albums.length, totals.albums)} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onPlay={onPlay} onPlayArtist={onPlayArtist} />
-        <AlbumsTab albums={albums} total={totals.albums} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenAlbum={onOpenAlbum} />
+        <AlbumsTab albums={albums} total={totals.albums} onOpenAlbum={onOpenAlbum} />
         <SongsTab songs={songs} hasMore={hasMore(likedTrackCount, totals.songs)} loadingMore={loadingMore.tracks} onLoadMore={() => loadMore('tracks')} onPlay={onPlay} />
         <GenresTab artists={followedArtists} albums={albums} onPlay={onPlay} />
-        <PlaylistsTab playlists={playlists} total={totals.playlists} loadingMore={loadingMore.playlists} onLoadMore={() => loadMore('playlists')} onOpenPlaylist={onOpenPlaylist} />
+        <PlaylistsTab playlists={playlists} total={totals.playlists} onOpenPlaylist={onOpenPlaylist} />
         <RadioTab artists={artists} albumsByArtist={albumsByArtist} onPlay={onPlay} />
       </PivotArea>
       <BottomBack onBack={onBack} />

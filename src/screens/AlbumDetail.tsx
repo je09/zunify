@@ -1,7 +1,8 @@
 import { Track, Album, fmt } from '../data'
-import { Pivot, PivotArea, Overline, Thumb, useSwipe, BottomBack, WP8Spinner } from '../components/Pivot'
+import { Pivot, PivotArea, Overline, Thumb, useSwipe, BottomBack } from '../components/Pivot'
 import { Icons } from '../components/icons'
 import { useAlbumDetail } from './useAlbumDetail'
+import { TrackSkeletonRows } from './collectionTabs'
 
 interface Props {
   album: Album
@@ -58,7 +59,7 @@ export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist
           </div>
 
           {fullAlbum.tracks.length === 0 && loadingEnrich ? (
-            <WP8Spinner />
+            <div className="track-list"><TrackSkeletonRows count={12} /></div>
           ) : (
             <div className="track-list">
               {fullAlbum.tracks.map(([title, dur], i) => {

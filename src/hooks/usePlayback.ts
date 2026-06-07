@@ -56,6 +56,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const queueRef = useRef(queue)
   const idxRef = useRef(idx)
   const startupSyncRef = useRef(false)
+  const playRequestRef = useRef(0)
   const skipPendingRef = useRef(false)
   const sdkBaseRef = useRef<{ position: number; timestamp: number }>({ position: 0, timestamp: 0 })
 
@@ -130,23 +131,36 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
     if (!command) return
 
     claimAudioSession()
+    const requestId = ++playRequestRef.current
     setStarted(true)
     setQueue(q)
     setIdx(i)
     setTime(0)
     setRemotePlaying(true)
 
-    const engine = spotifyRef.current
-    if (engine) void engine.player.activateElement()
-    const request = command.type === 'context'
-      ? engine
-        ? engine.startPlaybackContext(command.contextUri, command.offset)
-        : startPlaybackApi({ context_uri: command.contextUri, offset: command.offset })
-      : engine
-        ? engine.startPlayback(command.uris, command.offsetIndex)
+    const request = (async () => {
+      const engine = spotifyRef.current
+      const fallback = () => command.type === 'context'
+        ? startPlaybackApi({ context_uri: command.contextUri, offset: command.offset })
         : startPlaybackApi({ uris: command.uris, offset: { position: command.offsetIndex } })
 
-    void request.catch(() => setRemotePlaying(false))
+      if (!engine) {
+        await fallback()
+        return
+      }
+
+      await engine.player.activateElement().catch(() => {})
+      try {
+        if (command.type === 'context') await engine.startPlaybackContext(command.contextUri, command.offset)
+        else await engine.startPlayback(command.uris, command.offsetIndex)
+      } catch {
+        await fallback()
+      }
+    })()
+
+    void request.catch(() => {
+      if (playRequestRef.current === requestId) setRemotePlaying(false)
+    })
   }, [])
 
   const toggle = useCallback(() => {

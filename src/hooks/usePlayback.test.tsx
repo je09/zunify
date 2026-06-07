@@ -211,4 +211,49 @@ describe('usePlayback', () => {
     expect(mockedSkipToNextOnDevice).toHaveBeenCalledTimes(1)
     expect(mockedSkipToNextOnDevice).toHaveBeenCalledWith('device-1')
   })
+
+  it('falls back to default playback API when SDK context play fails', async () => {
+    const activateElement = vi.fn().mockResolvedValue(undefined)
+    const startPlaybackContext = vi.fn().mockRejectedValue(new Error('device failed'))
+    const spotify = {
+      player: { activateElement },
+      deviceId: 'device-1',
+      startPlaybackContext,
+      sdkState: {
+        paused: false,
+        position: 0,
+        duration: 120000,
+        shuffle: false,
+        repeat_mode: 0,
+        disallows: {},
+        track_window: {
+          current_track: {
+            name: 'one',
+            uri: 'spotify:track:one',
+            album: { name: 'Album', uri: 'spotify:album:album', images: [] },
+            artists: [{ name: 'Artist', uri: 'spotify:artist:artist' }],
+          },
+          next_tracks: [],
+        },
+      },
+    } as unknown as SpotifyEngine
+
+    await act(async () => {
+      root.render(<Harness spotify={spotify} onState={state => { latest = state }} />)
+    })
+
+    await act(async () => {
+      latest.play(tracks, 1, 'spotify:playlist:playlist-1')
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(activateElement).toHaveBeenCalledTimes(1)
+    expect(startPlaybackContext).toHaveBeenCalledWith('spotify:playlist:playlist-1', { uri: 'spotify:track:two' })
+    expect(mockedStartPlayback).toHaveBeenCalledWith({
+      context_uri: 'spotify:playlist:playlist-1',
+      offset: { uri: 'spotify:track:two' },
+    })
+  })
 })

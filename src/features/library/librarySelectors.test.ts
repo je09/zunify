@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Album } from '../../data'
+import { Album, Playlist, Track } from '../../data'
 import { buildLibrary, mergeAlbums } from './librarySelectors'
 
 const album = (id: string, artist: string, title: string): Album => ({
@@ -32,5 +32,33 @@ describe('librarySelectors', () => {
     expect(library.artists).toEqual(['The Band', 'Followed Band'])
     expect(library.songs).toHaveLength(1)
     expect(library.songs[0].title).toBe('Zed song')
+  })
+
+  it('builds the songs tab from saved albums only', () => {
+    const likedTrack: Track = {
+      title: 'Liked only song',
+      artist: 'Liked Artist',
+      album: 'Liked Album',
+      dur: 180,
+      color: '#333',
+      spotifyUri: 'spotify:track:liked',
+    }
+    const likedPlaylist: Playlist = {
+      id: 'sp_liked',
+      name: 'liked songs',
+      items: [],
+      tracks: [likedTrack],
+      totalTracks: 1,
+    }
+
+    const library = buildLibrary(
+      [album('1', 'Album Artist', 'Saved Album')],
+      [likedPlaylist],
+      { albums: null, songs: 1, playlists: null },
+      null,
+    )
+
+    expect(library.songs.map(song => song.title)).toEqual(['Saved Album song'])
+    expect(library.playlists.find(playlist => playlist.id === 'sp_liked')?.tracks).toEqual([likedTrack])
   })
 })

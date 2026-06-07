@@ -36,7 +36,7 @@ export function buildLibrary(
     albums,
     followedArtists,
     artists: allArtistNames,
-    songs: buildSongs(songsAlbums),
+    songs: buildSongs(albums),
     playlists,
     likedTrackUris,
     savedTrackUris: likedTrackUris,

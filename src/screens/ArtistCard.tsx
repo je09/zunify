@@ -18,35 +18,38 @@ interface Props {
 interface ArtistState {
   artist: ArtistSummary | null
   topTracks: Track[]
-  albums: Album[]
-  singles: Album[]
+  albums: (Album | undefined)[]
+  singles: (Album | undefined)[]
   albumsTotal: number | null
   singlesTotal: number | null
-  loadingAlbums: boolean
-  loadingSingles: boolean
-  albumsFailed: boolean
-  singlesFailed: boolean
   loading: boolean
 }
 
 const ARTIST_RELEASE_LIMIT = 10
+const ARTIST_RELEASE_ROW_HEIGHT = 122
+const ARTIST_RELEASE_OVERSCAN = 6
+type ReleaseGroup = 'album' | 'single'
 
 export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPlay, onBack }: Props) {
   const { savedTrackUris, checkSavedTrackUris } = useLibrary()
+  const loadingReleasePagesRef = useRef<Record<ReleaseGroup, Set<number>>>({ album: new Set(), single: new Set() })
+  const loadedReleasePagesRef = useRef<Record<ReleaseGroup, Set<number>>>({ album: new Set(), single: new Set() })
+  const failedReleasePagesRef = useRef<Record<ReleaseGroup, Set<number>>>({ album: new Set(), single: new Set() })
+  const [failedReleasePages, setFailedReleasePages] = useState<Record<ReleaseGroup, Set<number>>>({ album: new Set(), single: new Set() })
   const [state, setState] = useState<ArtistState>({
     artist: null, topTracks: [], albums: [], singles: [],
     albumsTotal: null, singlesTotal: null,
-    loadingAlbums: false, loadingSingles: false,
-    albumsFailed: false, singlesFailed: false,
     loading: Boolean(artistId),
   })
 
   useEffect(() => {
+    loadingReleasePagesRef.current = { album: new Set(), single: new Set() }
+    loadedReleasePagesRef.current = { album: new Set(), single: new Set() }
+    failedReleasePagesRef.current = { album: new Set(), single: new Set() }
+    setFailedReleasePages({ album: new Set(), single: new Set() })
     setState({
       artist: null, topTracks: [], albums: [], singles: [],
       albumsTotal: null, singlesTotal: null,
-      loadingAlbums: false, loadingSingles: false,
-      albumsFailed: false, singlesFailed: false,
       loading: Boolean(artistId),
     })
     if (!artistId) return
@@ -60,12 +63,18 @@ export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPl
       fetchArtistAlbums(artistId, { limit: ARTIST_RELEASE_LIMIT, include_groups: 'single' }),
     ]).then(([artist, topTracks, albumsPage, singlesPage]) => {
       if (cancelled) return
+      loadedReleasePagesRef.current.album.add(0)
+      loadedReleasePagesRef.current.single.add(0)
+      const albumsTotal = albumsPage.total ?? albumsPage.items.length
+      const singlesTotal = singlesPage.total ?? singlesPage.items.length
+      const albums = Array<Album | undefined>(albumsTotal)
+      albumsPage.items.forEach((album, index) => { albums[index] = album })
+      const singles = Array<Album | undefined>(singlesTotal)
+      singlesPage.items.forEach((single, index) => { singles[index] = single })
       setState({
         artist, topTracks,
-        albums: albumsPage.items, singles: singlesPage.items,
-        albumsTotal: albumsPage.total, singlesTotal: singlesPage.total,
-        loadingAlbums: false, loadingSingles: false,
-        albumsFailed: false, singlesFailed: false,
+        albums, singles,
+        albumsTotal, singlesTotal,
         loading: false,
       })
     }).catch(() => {
@@ -75,43 +84,47 @@ export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPl
     return () => { cancelled = true }
   }, [artistId])
 
-  const { artist, topTracks, albums, singles, albumsTotal, singlesTotal, loadingAlbums, loadingSingles, albumsFailed, singlesFailed, loading } = state
+  const { artist, topTracks, albums, singles, albumsTotal, singlesTotal, loading } = state
 
-  const loadMoreReleases = useCallback(async (group: 'album' | 'single', force = false) => {
+  const loadReleasePage = useCallback((group: ReleaseGroup, pageIndex: number, force = false) => {
     if (!artistId) return
     const isAlbum = group === 'album'
-    const current = isAlbum ? state.albums : state.singles
     const total = isAlbum ? state.albumsTotal : state.singlesTotal
-    const loadingMore = isAlbum ? state.loadingAlbums : state.loadingSingles
-    const failed = isAlbum ? state.albumsFailed : state.singlesFailed
-    if (loadingMore || (!force && failed) || (total !== null && current.length >= total)) return
+    const offset = pageIndex * ARTIST_RELEASE_LIMIT
+    if (pageIndex < 0 || loadedReleasePagesRef.current[group].has(pageIndex) || loadingReleasePagesRef.current[group].has(pageIndex)) return
+    if (!force && failedReleasePagesRef.current[group].has(pageIndex)) return
+    if (total !== null && offset >= total) return
 
-    setState(prev => ({
-      ...prev,
-      [isAlbum ? 'loadingAlbums' : 'loadingSingles']: true,
-      [isAlbum ? 'albumsFailed' : 'singlesFailed']: false,
-    }))
+    loadingReleasePagesRef.current[group].add(pageIndex)
+    setFailedReleasePages(prev => {
+      if (!prev[group].has(pageIndex)) return prev
+      const next = { ...prev, [group]: new Set(prev[group]) }
+      next[group].delete(pageIndex)
+      failedReleasePagesRef.current = next
+      return next
+    })
 
-    try {
-      const page = await fetchArtistAlbums(artistId, {
-        limit: ARTIST_RELEASE_LIMIT,
-        offset: current.length,
-        include_groups: group,
+    fetchArtistAlbums(artistId, {
+      limit: ARTIST_RELEASE_LIMIT,
+      offset,
+      include_groups: group,
+    }).then(page => {
+      loadedReleasePagesRef.current[group].add(pageIndex)
+      setState(prev => ({
+        ...prev,
+        [isAlbum ? 'albums' : 'singles']: mergeReleasePage(isAlbum ? prev.albums : prev.singles, page.items, offset, page.total ?? offset + page.items.length),
+        [isAlbum ? 'albumsTotal' : 'singlesTotal']: page.total ?? offset + page.items.length,
+      }))
+    }).catch(() => {
+      setFailedReleasePages(prev => {
+        const next = { ...prev, [group]: new Set(prev[group]).add(pageIndex) }
+        failedReleasePagesRef.current = next
+        return next
       })
-      setState(prev => ({
-        ...prev,
-        [isAlbum ? 'albums' : 'singles']: [...(isAlbum ? prev.albums : prev.singles), ...page.items],
-        [isAlbum ? 'albumsTotal' : 'singlesTotal']: page.total,
-        [isAlbum ? 'loadingAlbums' : 'loadingSingles']: false,
-      }))
-    } catch {
-      setState(prev => ({
-        ...prev,
-        [isAlbum ? 'loadingAlbums' : 'loadingSingles']: false,
-        [isAlbum ? 'albumsFailed' : 'singlesFailed']: true,
-      }))
-    }
-  }, [artistId, state.albums, state.albumsFailed, state.albumsTotal, state.loadingAlbums, state.singles, state.singlesFailed, state.singlesTotal, state.loadingSingles])
+    }).finally(() => {
+      loadingReleasePagesRef.current[group].delete(pageIndex)
+    })
+  }, [artistId, state.albumsTotal, state.singlesTotal])
   const topTrackUris = useMemo(
     () => topTracks.map(t => t.spotifyUri).filter((uri): uri is string => Boolean(uri)),
     [topTracks]
@@ -124,11 +137,9 @@ export function ArtistCard({ name, artistId, tab, onTabChange, onOpenAlbum, onPl
 
   const bgImage = artist?.imageUrl
   const displayName = artist?.name ?? name
-  const contextUri = artistId ? `spotify:artist:${artistId}` : undefined
-
   const swipe = useSwipe(
-    () => tab === 0 ? onBack() : onTabChange(0),
-    () => onTabChange(1),
+    () => tab === 0 ? onBack() : onTabChange(tab - 1),
+    () => onTabChange(Math.min(2, tab + 1)),
   )
 
 return (
@@ -143,20 +154,8 @@ return (
       <div className="card-scrim" />
       <div className="card-body">
         <Overline>{displayName}</Overline>
-        {contextUri && topTracks.length > 0 && (
-          <div className="artist-actions">
-            <button
-              className="al-playall"
-              onClick={() => onPlay(topTracks, 0)}
-              aria-label={`Play ${displayName}`}
-            >
-              {Icons.play}
-              <span>play</span>
-            </button>
-          </div>
-        )}
 
-        <Pivot tabs={['albums', 'songs']} active={tab} onChange={onTabChange} />
+        <Pivot tabs={['albums', 'singles', 'songs']} active={tab} onChange={onTabChange} />
         <PivotArea tab={tab} ref={swipe}>
 
           {/* albums */}
@@ -164,50 +163,33 @@ return (
             {loading ? (
               <WP8Spinner />
             ) : (
-              <>
-                {albums.length > 0 && (
-                  <>
-                    <div className="section" style={{ paddingTop: 16 }}>in collection</div>
-                    {albums.map(a => (
-                      <div key={a.id} className="card-album" onClick={() => onOpenAlbum(a)}>
-                        <Thumb color={a.color} size={104} imageUrl={a.imageUrl} />
-                        <div className="card-album-meta">
-                          <div className="ca-title">{a.title}</div>
-                          <div className="ca-sub">{a.artist}</div>
-                        </div>
-                      </div>
-                    ))}
-                    <ReleaseLoadMore
-                      active={albumsTotal === null || albums.length < albumsTotal}
-                      loading={loadingAlbums}
-                      failed={albumsFailed}
-                      onLoadMore={() => loadMoreReleases('album')}
-                      onRetry={() => loadMoreReleases('album', true)}
-                    />
-                  </>
-                )}
-                {singles.length > 0 && (
-                  <>
-                    <div className="section">singles</div>
-                    {singles.map(a => (
-                      <div key={a.id} className="card-album" onClick={() => onOpenAlbum(a)}>
-                        <Thumb color={a.color} size={104} imageUrl={a.imageUrl} />
-                        <div className="card-album-meta">
-                          <div className="ca-title">{a.title}</div>
-                          <div className="ca-sub">{a.artist}</div>
-                        </div>
-                      </div>
-                    ))}
-                    <ReleaseLoadMore
-                      active={singlesTotal === null || singles.length < singlesTotal}
-                      loading={loadingSingles}
-                      failed={singlesFailed}
-                      onLoadMore={() => loadMoreReleases('single')}
-                      onRetry={() => loadMoreReleases('single', true)}
-                    />
-                  </>
-                )}
-              </>
+              <ReleaseList
+                group="album"
+                releases={albums}
+                total={albumsTotal}
+                failedPages={failedReleasePages.album}
+                emptyLabel="no albums"
+                onOpenAlbum={onOpenAlbum}
+                onLoadPage={loadReleasePage}
+              />
+            )}
+            <div style={{ height: 80 }} />
+          </div>
+
+          {/* singles */}
+          <div style={{ padding: '0 26px' }}>
+            {loading ? (
+              <WP8Spinner />
+            ) : (
+              <ReleaseList
+                group="single"
+                releases={singles}
+                total={singlesTotal}
+                failedPages={failedReleasePages.single}
+                emptyLabel="no singles"
+                onOpenAlbum={onOpenAlbum}
+                onLoadPage={loadReleasePage}
+              />
             )}
             <div style={{ height: 80 }} />
           </div>
@@ -244,23 +226,97 @@ return (
   )
 }
 
-function ReleaseLoadMore({ active, loading, failed, onLoadMore, onRetry }: {
-  active: boolean; loading: boolean; failed: boolean; onLoadMore: () => void; onRetry: () => void
+function mergeReleasePage(current: (Album | undefined)[], items: Album[], offset: number, total: number) {
+  const size = Math.max(total, current.length, offset + items.length)
+  const next = current.length === size ? [...current] : Array<Album | undefined>(size)
+  current.forEach((album, index) => { next[index] = album })
+  items.forEach((album, index) => { next[offset + index] = album })
+  return next
+}
+
+function ReleaseList({ group, releases, total, failedPages, emptyLabel, onOpenAlbum, onLoadPage }: {
+  group: ReleaseGroup
+  releases: (Album | undefined)[]
+  total: number | null
+  failedPages: Set<number>
+  emptyLabel: string
+  onOpenAlbum: (album: Album) => void
+  onLoadPage: (group: ReleaseGroup, pageIndex: number, force?: boolean) => void
 }) {
-  const ref = useRef<HTMLDivElement>(null)
+  const releaseTotal = total ?? releases.length
+  const range = useArtistVirtualRange(releaseTotal, ARTIST_RELEASE_ROW_HEIGHT)
 
   useEffect(() => {
-    if (!active || loading || failed) return
-    const el = ref.current
-    if (!el) return
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) onLoadMore()
-    }, { rootMargin: '900px 0px' })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [active, failed, loading, onLoadMore])
+    if (!releaseTotal) return
+    const firstPage = Math.floor(range.start / ARTIST_RELEASE_LIMIT)
+    const lastPage = Math.floor(Math.max(range.end - 1, range.start) / ARTIST_RELEASE_LIMIT)
+    for (let page = firstPage; page <= lastPage; page += 1) onLoadPage(group, page)
+  }, [group, onLoadPage, range.end, range.start, releaseTotal])
 
-  if (!active) return null
-  if (failed) return <button className="virtual-load-error" onClick={onRetry}>couldn't load · tap to retry</button>
-  return <div ref={ref} className="load-more-slot">{loading ? <WP8Spinner /> : null}</div>
+  if (releaseTotal === 0) return <div className="section" style={{ paddingTop: 16 }}>{emptyLabel}</div>
+
+  return (
+    <div ref={range.ref} className="artist-release-virtual" style={{ height: releaseTotal * ARTIST_RELEASE_ROW_HEIGHT }}>
+      {Array.from({ length: range.end - range.start }, (_, offset) => {
+        const index = range.start + offset
+        const album = releases[index]
+        const pageIndex = Math.floor(index / ARTIST_RELEASE_LIMIT)
+        return (
+          <div key={album?.id ?? `${group}-${index}`} className="artist-release-virtual-row" style={{ transform: `translateY(${index * ARTIST_RELEASE_ROW_HEIGHT}px)` }}>
+            {album ? (
+              <ReleaseRow album={album} onOpenAlbum={onOpenAlbum} />
+            ) : failedPages.has(pageIndex) ? (
+              <button className="virtual-load-error" onClick={() => onLoadPage(group, pageIndex, true)}>couldn't load · tap to retry</button>
+            ) : (
+              <ReleaseSkeletonRow />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function ReleaseRow({ album, onOpenAlbum }: { album: Album; onOpenAlbum: (album: Album) => void }) {
+  return (
+    <div className="card-album" onClick={() => onOpenAlbum(album)}>
+      <Thumb color={album.color} size={104} imageUrl={album.imageUrl} />
+      <div className="card-album-meta">
+        <div className="ca-title">{album.title}</div>
+        <div className="ca-sub">{album.artist}</div>
+      </div>
+    </div>
+  )
+}
+
+function ReleaseSkeletonRow() {
+  return (
+    <div className="card-album skeleton-row">
+      <div className="skeleton-block skeleton-art" />
+      <div className="card-album-meta skeleton-track-meta">
+        <div className="skeleton-block skeleton-title" />
+        <div className="skeleton-block skeleton-sub" />
+      </div>
+    </div>
+  )
+}
+
+function useArtistVirtualRange(total: number, rowHeight: number) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [viewport, setViewport] = useState({ top: 0, height: 0 })
+
+  useEffect(() => {
+    const pane = ref.current?.closest('.pivot-pane')
+    if (!(pane instanceof HTMLElement)) return
+    const update = () => setViewport({ top: pane.scrollTop, height: pane.clientHeight })
+    update()
+    pane.addEventListener('scroll', update, { passive: true })
+    return () => pane.removeEventListener('scroll', update)
+  }, [])
+
+  return useMemo(() => {
+    const start = Math.max(0, Math.floor(viewport.top / rowHeight) - ARTIST_RELEASE_OVERSCAN)
+    const visible = Math.ceil((viewport.height || 1) / rowHeight) + ARTIST_RELEASE_OVERSCAN * 2
+    return { ref, start, end: Math.min(total, start + visible) }
+  }, [rowHeight, total, viewport])
 }

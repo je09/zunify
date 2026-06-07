@@ -9,6 +9,7 @@ import { fetchSavedAlbumsPageAt, fetchUserPlaylistsPageAt } from '../spotifyApi'
 
 const VIRTUAL_PLAYLIST_ROW_HEIGHT = 106
 const VIRTUAL_ALBUM_ROW_HEIGHT = 106
+const VIRTUAL_ARTIST_ROW_HEIGHT = 64
 const VIRTUAL_OVERSCAN = 6
 
 export function hasMore(loaded: number, total: number | null): boolean {
@@ -152,40 +153,65 @@ export function ArtistsTab({ artists, albumsByArtist, artistIdByName, hasMore, l
   onPlay: (q: Track[], i: number, ctx?: string) => void
   onPlayArtist: (artistId: string, fallbackQueue: Track[]) => void
 }) {
-  // Group by first letter so sticky tile resolves within its group — no overlap at transition
-  const groups = useMemo(() => {
-    return groupArtistNamesByLetter(artists)
+  const rows = useMemo(() => {
+    return groupArtistNamesByLetter(artists).flatMap(({ letter, names }) => [
+      { type: 'letter' as const, key: `letter-${letter}`, letter },
+      ...names.map(name => ({ type: 'artist' as const, key: `artist-${name}`, name })),
+    ])
   }, [artists])
+  const range = usePivotScrollRange(rows.length, VIRTUAL_ARTIST_ROW_HEIGHT)
 
   return (
     <div className="llist">
       <Section>all music</Section>
-      {groups.map(({ letter, names }) => (
-        <div key={letter} className="letter-group">
-          <div className="index-tile">{letter}</div>
-          {names.map(name => {
-            const artistId = artistIdByName.get(name)
-            const queue = (albumsByArtist.get(name) ?? []).flatMap(albumQueue)
-            return (
-              <div key={name} className="lrow">
-                <button
-                  className="play-circle"
-                  aria-label={`Play ${name}`}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (artistId) onPlayArtist(artistId, queue)
-                    else if (queue.length) onPlay(queue, 0)
-                  }}
-                >
-                  {Icons.playCircle}
-                </button>
-                <div className="lrow-name" onClick={() => onOpenArtist(name, artistId)}>{name}</div>
-              </div>
-            )
-          })}
-        </div>
-      ))}
-      <LoadMoreSentinel active={hasMore} loading={loadingMore} onLoadMore={onLoadMore} preserveAnchor anchorKey={artists.length} skeleton={<TextSkeletonRows />} />
+      <div ref={range.ref} className="collection-virtual artist-virtual" style={{ height: rows.length * VIRTUAL_ARTIST_ROW_HEIGHT }}>
+        {rows.slice(range.start, range.end).map((row, offset) => {
+          const index = range.start + offset
+          return (
+            <div key={row.key} className="collection-virtual-row artist-virtual-row" style={{ transform: `translateY(${index * VIRTUAL_ARTIST_ROW_HEIGHT}px)` }}>
+              {row.type === 'letter' ? (
+                <div className="index-tile artist-index-tile">{row.letter}</div>
+              ) : (
+                <ArtistRow
+                  name={row.name}
+                  artistId={artistIdByName.get(row.name)}
+                  queue={(albumsByArtist.get(row.name) ?? []).flatMap(albumQueue)}
+                  onOpenArtist={onOpenArtist}
+                  onPlay={onPlay}
+                  onPlayArtist={onPlayArtist}
+                />
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <LoadMoreSentinel active={hasMore} loading={loadingMore} onLoadMore={onLoadMore} skeleton={<TextSkeletonRows />} />
+    </div>
+  )
+}
+
+function ArtistRow({ name, artistId, queue, onOpenArtist, onPlay, onPlayArtist }: {
+  name: string
+  artistId: string | undefined
+  queue: Track[]
+  onOpenArtist: (n: string, id?: string) => void
+  onPlay: (q: Track[], i: number, ctx?: string) => void
+  onPlayArtist: (artistId: string, fallbackQueue: Track[]) => void
+}) {
+  return (
+    <div className="lrow">
+      <button
+        className="play-circle"
+        aria-label={`Play ${name}`}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (artistId) onPlayArtist(artistId, queue)
+          else if (queue.length) onPlay(queue, 0)
+        }}
+      >
+        {Icons.playCircle}
+      </button>
+      <div className="lrow-name" onClick={() => onOpenArtist(name, artistId)}>{name}</div>
     </div>
   )
 }

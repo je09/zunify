@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Album } from '../data'
-import { AlbumsTab, buildGenresFromArtists, groupArtistNamesByLetter } from './collectionTabs'
+import { AlbumsTab, ArtistsTab, buildGenresFromArtists, groupArtistNamesByLetter } from './collectionTabs'
 
 const album = (artist: string, title: string): Album => ({
   id: `${artist}-${title}`,
@@ -54,6 +54,37 @@ describe('collectionTabs', () => {
       'translateY(0px)',
       'translateY(106px)',
       'translateY(212px)',
+    ])
+
+    root.unmount()
+    host.remove()
+  })
+
+  it('positions virtual artist rows at distinct vertical offsets', async () => {
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+
+    await act(async () => {
+      root.render(createElement(ArtistsTab, {
+        artists: ['Alice', 'Arctic Monkeys'],
+        albumsByArtist: new Map(),
+        artistIdByName: new Map(),
+        hasMore: false,
+        loadingMore: false,
+        onLoadMore: vi.fn(),
+        onOpenArtist: vi.fn(),
+        onPlay: vi.fn(),
+        onPlayArtist: vi.fn(),
+      }))
+    })
+
+    const rows = [...host.querySelectorAll<HTMLElement>('.artist-virtual-row')]
+    expect(rows).toHaveLength(3)
+    expect(rows.map(row => row.style.transform)).toEqual([
+      'translateY(0px)',
+      'translateY(64px)',
+      'translateY(128px)',
     ])
 
     root.unmount()

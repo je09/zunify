@@ -18,7 +18,7 @@ interface Props {
 }
 
 export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpenPlaylist, onPlay, onPlayArtist, onBack }: Props) {
-  const { albums, followedArtists, artists, songs, playlists, loading, loadingMore, error, totals, loadMore, artistIdByName } = useLibrary()
+  const { albums, followedArtists, artists, songs, playlists, loading, loadingMore, error, totals, loadMore, artistIdByName, userId } = useLibrary()
   const swipe = useSwipe(
     () => tab === 0 ? onBack() : onTabChange(tab - 1),
     () => onTabChange(Math.min(TABS.length - 1, tab + 1)),
@@ -28,7 +28,7 @@ export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpen
 
   useEffect(() => {
     if (loading) return
-    if (tab === 0 && likedTrackCount < 50 && hasMore(likedTrackCount, totals.songs) && !loadingMore.tracks) loadMore('tracks')
+    if ((tab === 0 || tab === 3) && likedTrackCount < 50 && hasMore(likedTrackCount, totals.songs) && !loadingMore.tracks) loadMore('tracks')
     if (tab === 2 && hasMore(albums.length, totals.albums) && !loadingMore.albums) loadMore('albums')
   }, [tab, albums.length, totals.albums, likedTrackCount, totals.songs, loading, loadingMore.albums, loadingMore.tracks, loadMore])
 
@@ -43,7 +43,7 @@ export function Collection({ tab, onTabChange, onOpenArtist, onOpenAlbum, onOpen
         <ArtistsTab artists={artists} albumsByArtist={albumsByArtist} artistIdByName={artistIdByName} hasMore={hasMore(albums.length, totals.albums)} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onOpenArtist={onOpenArtist} onPlay={onPlay} onPlayArtist={onPlayArtist} />
         <AlbumsTab albums={albums} total={totals.albums} onOpenAlbum={onOpenAlbum} />
         <SongsTab songs={songs} hasMore={hasMore(albums.length, totals.albums)} loadingMore={loadingMore.albums} onLoadMore={() => loadMore('albums')} onPlay={onPlay} />
-        <GenresTab artists={followedArtists} albums={albums} onPlay={onPlay} />
+        <GenresTab artists={followedArtists} albums={albums} likedTracks={playlists.find(pl => pl.id === 'sp_liked')?.tracks ?? []} userId={userId} onPlay={onPlay} />
         <PlaylistsTab playlists={playlists} total={totals.playlists} onOpenPlaylist={onOpenPlaylist} />
         <RadioTab artists={artists} albumsByArtist={albumsByArtist} onPlay={onPlay} />
       </PivotArea>

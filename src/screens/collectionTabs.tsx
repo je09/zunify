@@ -5,7 +5,7 @@ import { FadeImage } from '../components/FadeImage'
 import { Icons } from '../components/icons'
 import { useLibrary } from '../LibraryContext'
 import { LIBRARY_BATCH_LIMIT } from '../features/spotify/shared'
-import { fetchSavedAlbumsPageAt, fetchUserPlaylistsPageAt } from '../spotifyApi'
+import { fetchArtists, fetchSavedAlbumsPageAt, fetchUserPlaylistsPageAt } from '../spotifyApi'
 
 const VIRTUAL_PLAYLIST_ROW_HEIGHT = 106
 const VIRTUAL_ALBUM_ROW_HEIGHT = 106
@@ -55,9 +55,10 @@ export function buildGenresFromArtists(artists: ArtistSummary[], albums: Album[]
     .sort(([aGenre, aList], [bGenre, bList]) => bList.length - aList.length || aGenre.localeCompare(bGenre, 'en', { sensitivity: 'base' }))
     .map(([genre, list], index) => {
       const names = new Set(list.map(a => a.name))
+      const albumColor = albums.find(a => names.has(a.artist))?.color
       return {
         label: genre,
-        color: albums.find(a => names.has(a.artist))?.color ?? GENRE_COLORS[index % GENRE_COLORS.length],
+        color: albumColor && albumColor !== '#555' ? albumColor : GENRE_COLORS[index % GENRE_COLORS.length],
         artistIds: list.map(a => a.id),
         artistNames: list.map(a => a.name),
       }
@@ -380,19 +381,61 @@ export function SongsTab({ songs, hasMore, loadingMore, onLoadMore, onPlay }: {
   )
 }
 
-export function GenresTab({ artists, albums, onPlay }: {
+const GENRE_ARTIST_LOOKUP_LIMIT = 50
+
+export function GenresTab({ artists, albums, likedTracks, userId, onPlay }: {
   artists: ArtistSummary[]
   albums: Album[]
+  likedTracks: Track[]
+  userId: string | null
   onPlay: (q: Track[], i: number) => void
 }) {
-  const genres = useMemo(() => buildGenresFromArtists(artists, albums), [artists, albums])
+  const [enrichedArtists, setEnrichedArtists] = useState<ArtistSummary[]>([])
+  const requestedArtistIdsRef = useRef<Set<string>>(new Set())
+  const artistIdsKey = useMemo(() => [...new Set(likedTracks.map(t => t.artistId).filter((id): id is string => Boolean(id)))].join(','), [likedTracks])
+  const genreArtists = useMemo(() => {
+    const byId = new Map<string, ArtistSummary>()
+    const byName = new Map<string, ArtistSummary>()
+    const likedArtistIds = new Set(likedTracks.map(track => track.artistId).filter((id): id is string => Boolean(id)))
+    const likedArtistNames = new Set(likedTracks.map(track => track.artist))
+    artists.forEach(artist => {
+      byId.set(artist.id, artist)
+      byName.set(artist.name, artist)
+    })
+    enrichedArtists.forEach(artist => {
+      byId.set(artist.id, artist)
+      byName.set(artist.name, artist)
+    })
+    return [...new Map([...byId.values(), ...byName.values()].map(artist => [artist.id || artist.name, artist])).values()]
+      .filter(artist => likedArtistIds.has(artist.id) || likedArtistNames.has(artist.name))
+  }, [artists, enrichedArtists, likedTracks])
+  const genres = useMemo(() => buildGenresFromArtists(genreArtists, albums), [genreArtists, albums])
   const [loading, setLoading] = useState<string | null>(null)
 
-  const play = (g: { label: string; artistNames: string[] }) => {
+  useEffect(() => {
+    requestedArtistIdsRef.current = new Set()
+    setEnrichedArtists([])
+  }, [userId])
+
+  useEffect(() => {
+    if (!artistIdsKey || requestedArtistIdsRef.current.size >= GENRE_ARTIST_LOOKUP_LIMIT) return
+    const knownIds = new Set(genreArtists.map(artist => artist.id))
+    const missingIds = artistIdsKey.split(',').filter(id => id && !knownIds.has(id) && !requestedArtistIdsRef.current.has(id))
+    const remaining = GENRE_ARTIST_LOOKUP_LIMIT - requestedArtistIdsRef.current.size
+    const batch = missingIds.slice(0, remaining)
+    if (!batch.length) return
+    batch.forEach(id => requestedArtistIdsRef.current.add(id))
+    fetchArtists(batch)
+      .then(items => setEnrichedArtists(prev => [...prev, ...items]))
+      .catch(() => {})
+  }, [artistIdsKey, genreArtists])
+
+  const play = (g: { label: string; artistIds: string[]; artistNames: string[] }) => {
     if (loading) return
     setLoading(g.label)
+    const ids = new Set(g.artistIds)
     const names = new Set(g.artistNames)
-    const queue = albums.filter(album => names.has(album.artist)).flatMap(albumQueue)
+    const queue = likedTracks.filter(track => (track.artistId && ids.has(track.artistId)) || names.has(track.artist))
     if (queue.length) onPlay(queue, 0)
     setLoading(null)
   }

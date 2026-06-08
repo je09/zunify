@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { spotifyGet } from './client'
-import { fetchFollowedArtists } from './searchBrowseApi'
+import { fetchArtists, fetchFollowedArtists } from './searchBrowseApi'
 
 vi.mock('./client', () => ({ spotifyGet: vi.fn() }))
 
@@ -32,6 +32,17 @@ describe('searchBrowseApi', () => {
     ])
     expect(mockedSpotifyGet).toHaveBeenNthCalledWith(1, '/me/following?type=artist&limit=50')
     expect(mockedSpotifyGet).toHaveBeenNthCalledWith(2, 'https://api.spotify.com/v1/me/following?type=artist&after=1&limit=50')
+  })
+
+  it('fetches artists in one capped de-duplicated request', async () => {
+    mockedSpotifyGet.mockResolvedValueOnce({
+      artists: [{ id: '1', name: 'One', genres: ['rock'], popularity: 1, images: [], followers: { total: 1 } }],
+    })
+    const ids = ['1', '1', ...Array.from({ length: 60 }, (_, index) => String(index + 2))]
+
+    await expect(fetchArtists(ids)).resolves.toMatchObject([{ id: '1', name: 'One', genres: ['rock'] }])
+    expect(mockedSpotifyGet).toHaveBeenCalledTimes(1)
+    expect(mockedSpotifyGet.mock.calls[0][0].split('ids=')[1].split(',')).toHaveLength(50)
   })
 
 })

@@ -21,6 +21,13 @@ export async function fetchArtist(id: string): Promise<ArtistSummary> {
   return mapArtist(await spotifyGet<SpFullArtist>(`/artists/${id}`))
 }
 
+export async function fetchArtists(ids: string[]): Promise<ArtistSummary[]> {
+  const uniqueIds = [...new Set(ids)].slice(0, 50)
+  if (!uniqueIds.length) return []
+  const data = await spotifyGet<{ artists: SpFullArtist[] }>(`/artists?ids=${uniqueIds.join(',')}`)
+  return data.artists.map(mapArtist)
+}
+
 export async function fetchArtistAlbums(
   id: string,
   params: { limit?: number; offset?: number; include_groups?: string; market?: string } = {}

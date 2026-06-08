@@ -56,7 +56,7 @@ export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
     })
     setViewport({ top: 0, height: scrollRef.current?.clientHeight ?? 0 })
     scrollRef.current?.scrollTo({ top: 0 })
-  }, [current])
+  }, [current.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadPage = useCallback((pageIndex: number, force = false) => {
     if (pageIndex < 0 || loadedPagesRef.current.has(pageIndex) || loadingPagesRef.current.has(pageIndex)) return

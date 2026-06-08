@@ -295,4 +295,28 @@ describe('usePlayback', () => {
       offset: { uri: 'spotify:track:two' },
     })
   })
+
+  it('resumes on the new device when SDK state is not live yet', async () => {
+    const activateElement = vi.fn().mockResolvedValue(undefined)
+    const togglePlay = vi.fn().mockResolvedValue(undefined)
+    const spotify = {
+      player: { activateElement, togglePlay },
+      deviceId: 'device-1',
+      sdkState: null,
+    } as unknown as SpotifyEngine
+
+    await act(async () => {
+      root.render(<Harness spotify={spotify} onState={state => { latest = state }} />)
+    })
+
+    await act(async () => {
+      latest.toggle()
+      await Promise.resolve()
+    })
+
+    expect(activateElement).not.toHaveBeenCalled()
+    expect(togglePlay).not.toHaveBeenCalled()
+    expect(mockedStartPlayback).toHaveBeenCalledWith({}, 'device-1')
+    expect(latest.playing).toBe(true)
+  })
 })

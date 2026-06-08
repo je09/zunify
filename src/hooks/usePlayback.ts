@@ -185,19 +185,20 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
 
   const toggle = useCallback(() => {
     claimAudioSession()
-    if (spotifyRef.current?.player) {
-      void spotifyRef.current.player.activateElement()
-      void spotifyRef.current.player.togglePlay()
+    const engine = spotifyRef.current
+    const fallback = () => remotePlaying ? pausePlayback() : startPlaybackApi({}, engine?.deviceId)
+
+    if (engine?.player && engine.sdkState) {
+      void engine.player.activateElement()
+      void engine.player.togglePlay().catch(() => fallback().catch(() => {}))
       return
     }
-    if (remotePlaying) {
-      setRemotePlaying(false)
-      void pausePlayback().catch(() => setRemotePlaying(true))
-      return
-    }
-    setStarted(true)
-    setRemotePlaying(true)
-    void startPlaybackApi().catch(() => setRemotePlaying(false))
+
+    const nextPlaying = !remotePlaying
+    setRemotePlaying(nextPlaying)
+    if (nextPlaying) setStarted(true)
+
+    void fallback().catch(() => setRemotePlaying(remotePlaying))
   }, [remotePlaying])
 
   const timeRef = useRef(time)

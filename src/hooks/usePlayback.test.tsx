@@ -146,6 +146,45 @@ describe('usePlayback', () => {
     expect(mockedSkipToNextOnDevice).not.toHaveBeenCalled()
   })
 
+  it('keeps the last SDK track when the player disconnects', async () => {
+    const spotify = {
+      player: {},
+      deviceId: 'device-1',
+      sdkState: {
+        paused: true,
+        position: 42000,
+        duration: 120000,
+        shuffle: false,
+        repeat_mode: 0,
+        disallows: {},
+        track_window: {
+          current_track: {
+            name: 'one',
+            uri: 'spotify:track:one',
+            album: { name: 'Album', uri: 'spotify:album:album', images: [] },
+            artists: [{ name: 'Artist', uri: 'spotify:artist:artist' }],
+          },
+          next_tracks: [],
+        },
+      },
+    } as unknown as SpotifyEngine
+
+    await act(async () => {
+      root.render(<Harness spotify={spotify} onState={state => { latest = state }} />)
+      await Promise.resolve()
+    })
+
+    expect(latest.track.title).toBe('one')
+    expect(latest.started).toBe(true)
+
+    await act(async () => {
+      root.render(<Harness spotify={null} onState={state => { latest = state }} />)
+    })
+
+    expect(latest.track.title).toBe('one')
+    expect(latest.started).toBe(true)
+  })
+
   it('ignores repeated next while a skip command is pending', async () => {
     let resolveSkip!: () => void
     mockedSkipToNext.mockReturnValueOnce(new Promise(resolve => { resolveSkip = resolve }))

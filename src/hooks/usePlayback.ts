@@ -51,6 +51,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const [remoteRepeat, setRemoteRepeat] = useState<0 | 1 | 2>(0)
   const [started, setStarted] = useState(false)
   const [skipPending, setSkipPending] = useState(false)
+  const [lastTrack, setLastTrack] = useState<Track | null>(null)
 
   const spotifyRef = useRef<SpotifyEngine | null | undefined>(undefined)
   const queueRef = useRef(queue)
@@ -68,7 +69,10 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   const sdkLive = spotify != null && s != null
   const sdkPaused = s?.paused
   const sdkCurrent = sdkLive ? s!.track_window.current_track : null
-  const track = getSdkTrack(spotify) ?? queue[idx] ?? NULL_TRACK
+  const sdkTrack = getSdkTrack(spotify)
+  const queuedTrack = queue[idx]
+  const liveTrack = sdkTrack ?? queuedTrack ?? null
+  const track = liveTrack ?? lastTrack ?? NULL_TRACK
   const playing = sdkLive ? !s!.paused : remotePlaying
   const shuffle = sdkLive ? s!.shuffle : remoteShuffle
   const repeat = sdkLive ? getSdkRepeatMode(spotify) : remoteRepeat
@@ -100,7 +104,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
         setRemotePlaying(current.isPlaying)
         setRemoteShuffle(current.shuffle)
         setRemoteRepeat(current.repeat)
-        setStarted(current.isPlaying)
+        setStarted(Boolean(current.track))
       })
       .catch(() => {})
 
@@ -110,6 +114,22 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
   useEffect(() => {
     if (trackUri) checkSavedTrackUris([trackUri])
   }, [trackUri, checkSavedTrackUris])
+
+  useEffect(() => {
+    if (!liveTrack?.title) return
+    setLastTrack(liveTrack)
+    setStarted(true)
+  }, [
+    liveTrack?.spotifyUri,
+    liveTrack?.title,
+    liveTrack?.artist,
+    liveTrack?.artistId,
+    liveTrack?.album,
+    liveTrack?.albumID,
+    liveTrack?.dur,
+    liveTrack?.color,
+    liveTrack?.imageUrl,
+  ])
 
   useEffect(() => {
     if (!sdkLive || !s) return
@@ -175,6 +195,7 @@ export function usePlayback(spotify?: SpotifyEngine | null): PlaybackState {
       void pausePlayback().catch(() => setRemotePlaying(true))
       return
     }
+    setStarted(true)
     setRemotePlaying(true)
     void startPlaybackApi().catch(() => setRemotePlaying(false))
   }, [remotePlaying])

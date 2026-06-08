@@ -68,9 +68,8 @@ export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist
                 const isSaved = savedIds.has(id)
                 return (
                   <div key={title + i} className="al-track" onClick={() => onPlay(queue, i, contextUri)}>
-                    <span className="al-tnum"></span>
                     <span className="al-ttitle">{title}</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div className="al-track-actions">
                       {uri && (
                         <button
                           className={'iconbtn ' + (isSaved ? 'on' : 'outline')}

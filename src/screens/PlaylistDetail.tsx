@@ -178,12 +178,11 @@ function PlaylistTrackRow({ track, isSaved, onPlay, onToggleSaved }: {
 }) {
   return (
     <div className="al-track playlist-track-row" onClick={onPlay}>
-      <span className="al-tnum"></span>
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div className="al-track-main">
         <div className="al-ttitle">{track.title}</div>
-        <div className="al-tdur" style={{ fontSize: 14, marginTop: 2 }}>{track.artist}</div>
+        <div className="al-track-sub">{track.artist}</div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div className="al-track-actions">
         {track.spotifyUri && (
           <button
             className={'iconbtn ' + (isSaved ? 'on' : 'outline')}

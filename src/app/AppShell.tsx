@@ -60,7 +60,7 @@ export function AppShell({ token, onLogout }: AppShellProps) {
       pb.track.spotifyUri &&
       selected.spotifyUri === pb.track.spotifyUri
     )
-    if (!pb.playing || !sameTrack) pb.play(queue, idx, contextUri)
+    if (!pb.playing || !sameTrack || contextUri) pb.play(queue, idx, contextUri)
     push({ screen: 'nowplaying' })
   }
 

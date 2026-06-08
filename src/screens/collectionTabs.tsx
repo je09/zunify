@@ -102,6 +102,7 @@ export function TrackSkeletonRows({ count = 10, detail = false }: { count?: numb
 function TrackSkeletonRow({ detail }: { detail: boolean }) {
   return (
     <div className="al-track skeleton-row" aria-hidden="true">
+      <span className="al-tnum" />
       {detail ? (
         <span className="skeleton-track-meta">
           <span className="skeleton-block skeleton-title" />

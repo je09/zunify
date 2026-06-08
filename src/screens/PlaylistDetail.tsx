@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Track, Playlist, playlistQueue, fmt } from '../data'
+import { Track, Playlist, playlistQueue } from '../data'
 import { useSwipe, BottomBack } from '../components/Pivot'
 import { useLibrary } from '../LibraryContext'
 import { Icons } from '../components/icons'
 import { TrackSkeletonRows } from './collectionTabs'
 import { TRACK_BATCH_LIMIT } from '../features/spotify/shared'
 import { fetchLikedTracksPageAt, fetchPlaylistTracksPageAt } from '../spotifyApi'
+import { TrackListRow } from './TrackListRow'
 
 const PLAYLIST_ROW_HEIGHT = 73
 const PLAYLIST_OVERSCAN = 8
@@ -177,24 +178,14 @@ function PlaylistTrackRow({ track, isSaved, onPlay, onToggleSaved }: {
   track: Track; isSaved: boolean; onPlay: () => void; onToggleSaved: () => void
 }) {
   return (
-    <div className="al-track playlist-track-row" onClick={onPlay}>
-      <div className="al-track-main">
-        <div className="al-ttitle">{track.title}</div>
-        <div className="al-track-sub">{track.artist}</div>
-      </div>
-      <div className="al-track-actions">
-        {track.spotifyUri && (
-          <button
-            className={'iconbtn ' + (isSaved ? 'on' : 'outline')}
-            style={{ width: 28, height: 28 }}
-            onClick={(e) => { e.stopPropagation(); onToggleSaved() }}
-            aria-label={isSaved ? 'Unlike' : 'Like'}
-          >
-            {Icons.heart}
-          </button>
-        )}
-        <span className="al-tdur">{fmt(track.dur)}</span>
-      </div>
-    </div>
+    <TrackListRow
+      title={track.title}
+      duration={track.dur}
+      subtitle={track.artist}
+      spotifyUri={track.spotifyUri}
+      isSaved={isSaved}
+      onPlay={onPlay}
+      onToggleSaved={onToggleSaved}
+    />
   )
 }

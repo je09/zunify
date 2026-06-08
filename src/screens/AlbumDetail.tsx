@@ -1,8 +1,9 @@
-import { Track, Album, fmt } from '../data'
+import { Track, Album } from '../data'
 import { Pivot, PivotArea, Overline, Thumb, useSwipe, BottomBack } from '../components/Pivot'
 import { Icons } from '../components/icons'
 import { useAlbumDetail } from './useAlbumDetail'
 import { TrackSkeletonRows } from './collectionTabs'
+import { TrackListRow } from './TrackListRow'
 
 interface Props {
   album: Album
@@ -67,22 +68,15 @@ export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist
                 const id = uri?.split(':')[2] ?? ''
                 const isSaved = savedIds.has(id)
                 return (
-                  <div key={title + i} className="al-track" onClick={() => onPlay(queue, i, contextUri)}>
-                    <span className="al-ttitle">{title}</span>
-                    <div className="al-track-actions">
-                      {uri && (
-                        <button
-                          className={'iconbtn ' + (isSaved ? 'on' : 'outline')}
-                          style={{ width: 28, height: 28 }}
-                          onClick={(e) => { e.stopPropagation(); toggleSave(i) }}
-                          aria-label={isSaved ? 'Unlike' : 'Like'}
-                        >
-                          {Icons.heart}
-                        </button>
-                      )}
-                      <span className="al-tdur">{fmt(dur)}</span>
-                    </div>
-                  </div>
+                  <TrackListRow
+                    key={title + i}
+                    title={title}
+                    duration={dur}
+                    spotifyUri={uri}
+                    isSaved={isSaved}
+                    onPlay={() => onPlay(queue, i, contextUri)}
+                    onToggleSaved={() => toggleSave(i)}
+                  />
                 )
               })}
               <div style={{ height: 80 }} />

@@ -484,7 +484,7 @@ body {
 .track-list   { padding: 0 26px; }
 .al-track     { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); cursor: pointer; min-height: 48px; }
 .playlist-virtual { position: relative; }
-.playlist-virtual-row { position: absolute; left: 0; right: 0; top: 0; height: 73px; }
+.playlist-virtual-row { position: absolute; left: 26px; right: 26px; top: 0; height: 73px; }
 .playlist-virtual-row,
 .collection-virtual-row { animation: none !important; }
 .playlist-virtual-row > .al-track { height: 73px; }

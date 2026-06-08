@@ -138,7 +138,6 @@ export function PlaylistDetail({ playlist, onPlay, onBack }: Props) {
       <div key={index} className="playlist-virtual-row" style={{ transform: `translateY(${index * PLAYLIST_ROW_HEIGHT}px)` }}>
         {track ? (
           <PlaylistTrackRow
-            index={index}
             track={track}
             isSaved={Boolean(track.spotifyUri && savedTrackUris.has(track.spotifyUri))}
             onPlay={() => playTrack(track)}
@@ -174,12 +173,12 @@ function VirtualLoadError({ onRetry }: { onRetry: () => void }) {
   return <button className="virtual-load-error" onClick={onRetry}>couldn't load · tap to retry</button>
 }
 
-function PlaylistTrackRow({ index, track, isSaved, onPlay, onToggleSaved }: {
-  index: number; track: Track; isSaved: boolean; onPlay: () => void; onToggleSaved: () => void
+function PlaylistTrackRow({ track, isSaved, onPlay, onToggleSaved }: {
+  track: Track; isSaved: boolean; onPlay: () => void; onToggleSaved: () => void
 }) {
   return (
     <div className="al-track playlist-track-row" onClick={onPlay}>
-      <span className="al-tnum">{index + 1}</span>
+      <span className="al-tnum"></span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div className="al-ttitle">{track.title}</div>
         <div className="al-tdur" style={{ fontSize: 14, marginTop: 2 }}>{track.artist}</div>

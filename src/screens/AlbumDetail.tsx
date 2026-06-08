@@ -68,7 +68,7 @@ export function AlbumDetail({ album, tab, onTabChange, onOpenAlbum, onOpenArtist
                 const isSaved = savedIds.has(id)
                 return (
                   <div key={title + i} className="al-track" onClick={() => onPlay(queue, i, contextUri)}>
-                    <span className="al-tnum">{i + 1}</span>
+                    <span className="al-tnum"></span>
                     <span className="al-ttitle">{title}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {uri && (
